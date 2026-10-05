@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { ADMIN_COOKIE, checkAdminCredentials, createSessionToken } from "@/lib/admin-auth";
 import { checkRateLimit } from "@/lib/rate-limit";
 
+export const dynamic = 'force-dynamic';
+
 export async function POST(req: NextRequest) {
   const { email, password } = await req.json();
 

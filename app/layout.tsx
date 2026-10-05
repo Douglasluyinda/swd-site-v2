@@ -1,4 +1,21 @@
+import { Analytics } from '@vercel/analytics/next';
 import type { Metadata } from "next";
+import { Analytics } from '@vercel/analytics/next';
+
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <html lang="en">
+      <body>
+        {children}
+        <Analytics />
+      </body>
+    </html>
+  );
+}
 import "./globals.css";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
