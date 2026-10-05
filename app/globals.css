@@ -1,0 +1,82 @@
+@import "tailwindcss";
+
+:root {
+  /* SWD brand tokens */
+  --color-navy: #102a43;
+  --color-blue: #147dff;
+  --color-cyan: #22c7d6;
+  --color-light: #f4f8fc;
+  --color-charcoal: #17202a;
+  --color-slate: #52606d;
+  --color-white: #ffffff;
+
+  --color-blue-dark: #0f63cc;
+  --color-border: #dde5ee;
+  --color-border-strong: #c3d0e0;
+}
+
+@theme inline {
+  --color-navy: var(--color-navy);
+  --color-blue: var(--color-blue);
+  --color-blue-dark: var(--color-blue-dark);
+  --color-cyan: var(--color-cyan);
+  --color-light: var(--color-light);
+  --color-charcoal: var(--color-charcoal);
+  --color-slate: var(--color-slate);
+  --color-border: var(--color-border);
+  --color-border-strong: var(--color-border-strong);
+
+  /* Inter is loaded via next/font/google in production once the deploy
+     environment has network access; this stack is the offline-safe
+     fallback used while building in a sandboxed environment. */
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Roboto, Helvetica, Arial, sans-serif;
+
+  --animate-fade-up: fade-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+
+  @keyframes fade-up {
+    from {
+      opacity: 0;
+      transform: translateY(14px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--color-light);
+  color: var(--color-charcoal);
+  font-family: var(--font-sans);
+}
+
+::selection {
+  background: var(--color-blue);
+  color: var(--color-white);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-blue);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
