@@ -1,26 +1,13 @@
-"use client";
+'use client';
 
 import Image from "next/image";
 import Link from "next/link";
-import { useCart } from "@/lib/cart/CartContext";
 import { Button } from "@/components/Button";
 import { PageHero } from "@/components/PageHero";
+import { useCart } from "@/lib/cart/CartContext";
 
 export default function CartPage() {
-  const { items, removeItem, updateQuantity, subtotal, shippingTotal, total } =
-    useCart();
-
-  if (items.length === 0) {
-    return (
-      <PageHero
-        eyebrow="Cart"
-        title="Your cart is empty"
-        description="Browse the SWD Access catalogue to find something for your cart."
-      >
-        <Button href="/products">Browse products</Button>
-      </PageHero>
-    );
-  }
+  const { items, removeItem, updateQuantity, subtotal, shippingTotal, total } = useCart();
 
   return (
     <section className="mx-auto max-w-5xl px-5 py-16 sm:px-8">

@@ -1,28 +1,15 @@
+import type { Metadata } from 'next';
 import { Analytics } from '@vercel/analytics/next';
-import type { Metadata } from "next";
-import { Analytics } from '@vercel/analytics/next';
+import { CartProvider } from '@/lib/cart/CartContext';
+import './globals.css';
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  return (
-    <html lang="en">
-      <body>
-        {children}
-        <Analytics />
-      </body>
-    </html>
-  );
-}
-import "./globals.css";
-import { Navbar } from "@/components/Navbar";
-import { Footer } from "@/components/Footer";
-import { business } from "@/lib/config";
-import { CartProvider } from "@/lib/cart/CartContext";
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://swd-site-v2-qco83wghv-luyindadouglas-9460.vercel.app';
 
-const siteUrl = "https://swd.example";
+const business = {
+  name: 'SWD',
+  fullName: 'SWD Technology',
+  tagline: 'Technology Made Simple',
+};
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
@@ -59,18 +46,11 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className="antialiased">
+      <body>
         <CartProvider>
-          <a
-            href="#main"
-            className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-50 focus:rounded-md focus:bg-navy focus:px-4 focus:py-2 focus:text-white"
-          >
-            Skip to content
-          </a>
-          <Navbar />
-          <main id="main">{children}</main>
-          <Footer />
+          {children}
         </CartProvider>
+        <Analytics />
       </body>
     </html>
   );

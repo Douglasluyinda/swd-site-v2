@@ -6,14 +6,6 @@
 // serverless (Vercel), prefer a provider with a pooled/serverless-friendly
 // connection string (e.g. Neon's "-pooler" host) to avoid exhausting
 // connections across many concurrent function invocations.
-export function getDb() {
-  const connectionString = process.env.DATABASE_URL;
-  if (!connectionString) {
-    throw new Error("Missing DATABASE_URL. Set it to a Postgres connection string.");
-  }
-  return neon(connectionString);
-}
-
 import postgres from "postgres";
 import { drizzle } from "drizzle-orm/postgres-js";
 import * as schema from "./schema";
