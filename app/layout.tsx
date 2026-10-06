@@ -1,15 +1,11 @@
-import type { Metadata } from 'next';
-import { Analytics } from '@vercel/analytics/next';
-import { CartProvider } from '@/lib/cart/CartContext';
-import './globals.css';
+import type { Metadata } from "next";
+import "./globals.css";
+import { Navbar } from "@/components/Navbar";
+import { Footer } from "@/components/Footer";
+import { business } from "@/lib/config";
+import { CartProvider } from "@/lib/cart/CartContext";
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://swd-site-v2-qco83wghv-luyindadouglas-9460.vercel.app';
-
-const business = {
-  name: 'SWD',
-  fullName: 'SWD Technology',
-  tagline: 'Technology Made Simple',
-};
+const siteUrl = "https://swd.example";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
@@ -46,11 +42,18 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body>
+      <body className="antialiased">
         <CartProvider>
-          {children}
+          <a
+            href="#main"
+            className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-50 focus:rounded-md focus:bg-navy focus:px-4 focus:py-2 focus:text-white"
+          >
+            Skip to content
+          </a>
+          <Navbar />
+          <main id="main">{children}</main>
+          <Footer />
         </CartProvider>
-        <Analytics />
       </body>
     </html>
   );

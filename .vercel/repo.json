@@ -1,0 +1,11 @@
+{
+  "remoteName": "origin",
+  "projects": [
+    {
+      "id": "prj_K3bDcKUk2mzuBovJM3u9tAcjbCwM",
+      "name": "swd-site-v2",
+      "directory": ".",
+      "orgId": "team_kHtymmEgdzmmQH1bLj7cA3BU"
+    }
+  ]
+}

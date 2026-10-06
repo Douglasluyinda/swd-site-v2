@@ -6,6 +6,7 @@
 // serverless (Vercel), prefer a provider with a pooled/serverless-friendly
 // connection string (e.g. Neon's "-pooler" host) to avoid exhausting
 // connections across many concurrent function invocations.
+
 import postgres from "postgres";
 import { drizzle } from "drizzle-orm/postgres-js";
 import * as schema from "./schema";
