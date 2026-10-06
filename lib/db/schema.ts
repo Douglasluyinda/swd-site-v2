@@ -1,244 +1,211 @@
-// SWD commerce platform — Drizzle schema (PostgreSQL).
-//
-// Local dev connects to a local Postgres instance; production points
-// DATABASE_URL at a managed Postgres (Neon, Supabase, Vercel Postgres,
-// etc.) — no code change needed, just the connection string. See
-// DELIVERY.md for setup instructions.
-
 import {
   pgTable,
+  serial,
   text,
+  numeric,
   integer,
-  real,
-  boolean,
   timestamp,
-  uuid,
+  boolean,
 } from "drizzle-orm/pg-core";
 
-const id = () => uuid("id").primaryKey().defaultRandom();
-
-const timestamps = {
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
-};
-
-// ---------------------------------------------------------------------------
-// People
-// ---------------------------------------------------------------------------
-
-export const customers = pgTable("customers", {
-  id: id(),
-  fullName: text("full_name").notNull(),
-  email: text("email").notNull().unique(),
-  phone: text("phone"),
-  createdAt: timestamps.createdAt,
-});
-
+// 1. ADMINS
 export const admins = pgTable("admins", {
-  id: id(),
+  id: serial("id").primaryKey(),
+  name: text("name"),
   email: text("email").notNull().unique(),
   passwordHash: text("password_hash").notNull(),
-  name: text("name").notNull(),
-  role: text("role").notNull().default("admin"), // admin | staff
-  createdAt: timestamps.createdAt,
+  role: text("role").default("admin"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
-// ---------------------------------------------------------------------------
-// Catalogue
-// ---------------------------------------------------------------------------
+// 2. RATE LIMITS
+export const rateLimits = pgTable("rate_limits", {
+  key: text("key").primaryKey(),
+  count: integer("count").default(0).notNull(),
+  windowStart: timestamp("window_start"),
+  resetAt: timestamp("reset_at"),
+});
 
+// 3. CATEGORIES
 export const categories = pgTable("categories", {
-  id: id(),
+  id: serial("id").primaryKey(),
   name: text("name").notNull(),
   slug: text("slug").notNull().unique(),
+  description: text("description"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+// 4. SUPPLIERS
 export const suppliers = pgTable("suppliers", {
-  id: id(),
+  id: serial("id").primaryKey(),
   name: text("name").notNull(),
-  country: text("country").notNull(),
+  contactEmail: text("contact_email"),
   contact: text("contact"),
+  phone: text("phone"),
+  country: text("country"),
   website: text("website"),
-  apiCapable: boolean("api_capable").notNull().default(false),
-  blindDropshipping: boolean("blind_dropshipping").notNull().default(false),
-  processingTimeDays: integer("processing_time_days").notNull().default(3),
-  shippingOptions: text("shipping_options"), // JSON string
+  type: text("type").default("DSERS").notNull(),
+  apiCapable: boolean("api_capable").default(false),
+  blindDropshipping: boolean("blind_dropshipping").default(false),
+  processingTimeDays: integer("processing_time_days"),
+  shippingOptions: text("shipping_options"),
   returnPolicy: text("return_policy"),
-  reliabilityScore: integer("reliability_score").notNull().default(3), // 1-5
-  status: text("status").notNull().default("active"), // active | paused | removed
-  createdAt: timestamps.createdAt,
+  reliabilityScore: numeric("reliability_score", { precision: 3, scale: 2 }),
+  status: text("status").default("active"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+// 5. PRODUCTS
 export const products = pgTable("products", {
-  id: id(),
-  sku: text("sku").notNull().unique(), // SWD SKU
-  title: text("title").notNull(),
-  slug: text("slug").notNull().unique(),
-  description: text("description").notNull(),
-  categoryId: uuid("category_id").notNull().references(() => categories.id),
-  images: text("images").notNull(), // JSON array of URLs
-  videos: text("videos"), // JSON array of URLs
-
-  supplierId: uuid("supplier_id").notNull().references(() => suppliers.id),
-  supplierSku: text("supplier_sku").notNull(),
-  supplierCost: real("supplier_cost").notNull(), // per unit
-  supplierShipping: real("supplier_shipping").notNull(), // per order
-  supplierStock: integer("supplier_stock").notNull().default(0),
-  supplierUrl: text("supplier_url"),
-  processingTimeDays: integer("processing_time_days").notNull().default(3),
-  deliveryEstimateDays: text("delivery_estimate_days").notNull(), // e.g. "7-14"
-
-  sellingPrice: real("selling_price").notNull(),
-  currency: text("currency").notNull().default("USD"),
-  customerShipping: real("customer_shipping").notNull().default(0),
-
-  stockStatus: text("stock_status").notNull().default("in_stock"), // in_stock | low_stock | out_of_stock
-  status: text("status").notNull().default("draft"), // draft | published | archived
-  isDemo: boolean("is_demo").notNull().default(false),
-
-  createdAt: timestamps.createdAt,
-  updatedAt: timestamps.updatedAt,
-});
-
-export const productVariants = pgTable("product_variants", {
-  id: id(),
-  productId: uuid("product_id").notNull().references(() => products.id),
-  name: text("name").notNull(), // e.g. "Color: Black"
+  id: serial("id").primaryKey(),
   sku: text("sku").notNull().unique(),
-  priceDelta: real("price_delta").notNull().default(0),
-  stock: integer("stock").notNull().default(0),
+  title: text("title").notNull(),
+  slug: text("slug"),
+  description: text("description"),
+  price: numeric("price", { precision: 10, scale: 2 }),
+  sellingPrice: numeric("selling_price", { precision: 10, scale: 2 }),
+  costPrice: numeric("cost_price", { precision: 10, scale: 2 }),
+  currency: text("currency").default("UGX"),
+  stock: integer("stock").default(0).notNull(),
+  stockStatus: text("stock_status"),
+  status: text("status").default("draft").notNull(),
+  images: text("images"),
+  videos: text("videos"),
+  supplierSku: text("supplier_sku"),
+  supplierCost: numeric("supplier_cost", { precision: 10, scale: 2 }),
+  supplierShipping: numeric("supplier_shipping", { precision: 10, scale: 2 }),
+  supplierStock: integer("supplier_stock"),
+  supplierUrl: text("supplier_url"),
+  processingTimeDays: integer("processing_time_days"),
+  deliveryEstimateDays: text("delivery_estimate_days"),
+  customerShipping: numeric("customer_shipping", { precision: 10, scale: 2 }),
+  isDemo: boolean("is_demo").default(false),
+  categoryId: integer("category_id").references(() => categories.id),
+  supplierId: integer("supplier_id").references(() => suppliers.id),
+
+  // DSers Mapping Columns
+  dsersSku: text("dsers_sku"),
+  dsersProductId: text("dsers_product_id"),
+  supplierType: text("supplier_type").default("DSERS"),
+
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
-// ---------------------------------------------------------------------------
-// Orders
-// ---------------------------------------------------------------------------
+// 6. PRODUCT VARIANTS
+export const productVariants = pgTable("product_variants", {
+  id: serial("id").primaryKey(),
+  productId: integer("product_id").references(() => products.id).notNull(),
+  title: text("title"),
+  sku: text("sku").notNull(),
+  dsersVariantId: text("dsers_variant_id"),
+  price: numeric("price", { precision: 10, scale: 2 }),
+  stock: integer("stock").default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+});
 
+// 7. PRODUCT IMAGES
+export const productImages = pgTable("product_images", {
+  id: serial("id").primaryKey(),
+  productId: integer("product_id").references(() => products.id).notNull(),
+  url: text("url").notNull(),
+  altText: text("alt_text"),
+  isPrimary: boolean("is_primary").default(false),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// 8. CUSTOMERS
+export const customers = pgTable("customers", {
+  id: serial("id").primaryKey(),
+  firstName: text("first_name"),
+  lastName: text("last_name"),
+  email: text("email").notNull().unique(),
+  phone: text("phone"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// 9. ORDERS
 export const orders = pgTable("orders", {
-  id: id(),
-  orderNumber: text("order_number").notNull().unique(), // SWD-2026-000001
-
-  customerId: uuid("customer_id").notNull().references(() => customers.id),
-
-  fullName: text("full_name").notNull(),
-  email: text("email").notNull(),
-  phone: text("phone").notNull(),
-  country: text("country").notNull(),
-  city: text("city").notNull(),
-  address: text("address").notNull(),
-  deliveryInstructions: text("delivery_instructions"),
-
-  // NEW | PAYMENT_PENDING | PAID | SUPPLIER_ORDER_PENDING | SUPPLIER_ORDERED
-  // PROCESSING | SHIPPED | IN_TRANSIT | DELIVERED | CANCELLED
-  // REFUND_PENDING | REFUNDED | FULFILLMENT_DELAYED | OUT_OF_STOCK
-  status: text("status").notNull().default("NEW"),
-
-  subtotal: real("subtotal").notNull(),
-  shippingTotal: real("shipping_total").notNull(),
-  discountTotal: real("discount_total").notNull().default(0),
-  total: real("total").notNull(),
-  currency: text("currency").notNull().default("USD"),
-
-  createdAt: timestamps.createdAt,
-  updatedAt: timestamps.updatedAt,
+  id: serial("id").primaryKey(),
+  orderNumber: text("order_number").notNull().unique(),
+  customerId: integer("customer_id").references(() => customers.id),
+  totalAmount: numeric("total_amount", { precision: 10, scale: 2 }),
+  currency: text("currency").default("UGX").notNull(),
+  paymentStatus: text("payment_status").default("pending"),
+  fulfillmentStatus: text("fulfillment_status").default("unfulfilled"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+// 10. ORDER ITEMS
 export const orderItems = pgTable("order_items", {
-  id: id(),
-  orderId: uuid("order_id").notNull().references(() => orders.id),
-  productId: uuid("product_id").notNull().references(() => products.id),
-  variantId: uuid("variant_id").references(() => productVariants.id),
-
+  id: serial("id").primaryKey(),
+  orderId: integer("order_id").references(() => orders.id).notNull(),
+  productId: integer("product_id").references(() => products.id).notNull(),
+  variantId: integer("variant_id").references(() => productVariants.id),
   quantity: integer("quantity").notNull(),
-  unitPrice: real("unit_price").notNull(), // snapshot at time of order
-  unitSupplierCost: real("unit_supplier_cost").notNull(), // snapshot at time of order
+  unitPrice: numeric("unit_price", { precision: 10, scale: 2 }).notNull(),
+  dsersSku: text("dsers_sku"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
-// ---------------------------------------------------------------------------
-// Payments
-// ---------------------------------------------------------------------------
-
+// 11. PAYMENTS
 export const payments = pgTable("payments", {
-  id: id(),
-  orderId: uuid("order_id").notNull().references(() => orders.id),
-
-  provider: text("provider").notNull(), // "flutterwave"
-  txRef: text("tx_ref").notNull().unique(), // our reference sent to gateway
-  providerTxId: text("provider_tx_id"), // gateway's id, filled on verification
-  status: text("status").notNull().default("initiated"), // initiated | successful | failed
-  amount: real("amount").notNull(),
-  currency: text("currency").notNull(),
-  feeAmount: real("fee_amount"),
-  verifiedAt: timestamp("verified_at", { withTimezone: true }),
-  rawPayload: text("raw_payload"), // JSON snapshot, for audit
-
-  createdAt: timestamps.createdAt,
+  id: serial("id").primaryKey(),
+  orderId: integer("order_id").references(() => orders.id).notNull(),
+  provider: text("provider").default("DPO").notNull(),
+  transactionToken: text("transaction_token"),
+  reference: text("reference").notNull(),
+  amount: numeric("amount", { precision: 10, scale: 2 }).notNull(),
+  currency: text("currency").default("UGX").notNull(),
+  status: text("status").default("pending").notNull(),
+  rawResponse: text("raw_response"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
-// ---------------------------------------------------------------------------
-// Fulfillment & shipping
-// ---------------------------------------------------------------------------
-
+// 12. FULFILLMENT
 export const fulfillments = pgTable("fulfillments", {
-  id: id(),
-  orderId: uuid("order_id").notNull().references(() => orders.id),
-
-  supplierOrderRef: text("supplier_order_ref"),
-  supplierCost: real("supplier_cost"),
-  status: text("status").notNull().default("pending"), // pending | sent | confirmed | failed
+  id: serial("id").primaryKey(),
+  orderId: integer("order_id").references(() => orders.id).notNull(),
   trackingNumber: text("tracking_number"),
   carrier: text("carrier"),
-  trackingUrl: text("tracking_url"),
-
-  createdAt: timestamps.createdAt,
-  updatedAt: timestamps.updatedAt,
+  status: text("status").default("pending").notNull(),
+  dsersOrderId: text("dsers_order_id"),
+  shippedAt: timestamp("shipped_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
-export const trackingEvents = pgTable("tracking_events", {
-  id: id(),
-  orderId: uuid("order_id").notNull().references(() => orders.id),
-
-  status: text("status").notNull(),
-  // order_received | payment_confirmed | supplier_processing | shipped |
-  // in_transit | out_for_delivery | delivered
-  note: text("note"),
-  occurredAt: timestamp("occurred_at", { withTimezone: true }).defaultNow().notNull(),
-});
-
-// ---------------------------------------------------------------------------
-// Marketing / audit (Phase 4 groundwork)
-// ---------------------------------------------------------------------------
-
-export const orderCounters = pgTable("order_counters", {
-  year: integer("year").primaryKey(),
-  seq: integer("seq").notNull().default(0),
-});
-
+// 13. COUPONS
 export const coupons = pgTable("coupons", {
-  id: id(),
+  id: serial("id").primaryKey(),
   code: text("code").notNull().unique(),
-  percentOff: integer("percent_off"),
-  amountOff: real("amount_off"),
-  active: boolean("active").notNull().default(true),
-  expiresAt: timestamp("expires_at", { withTimezone: true }),
+  discountType: text("discount_type").notNull(),
+  discountValue: numeric("discount_value", { precision: 10, scale: 2 }).notNull(),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
-export const auditLogs = pgTable("audit_logs", {
-  id: id(),
-  actor: text("actor").notNull(), // admin email or "system"
-  action: text("action").notNull(),
-  entity: text("entity").notNull(),
-  entityId: text("entity_id").notNull(),
-  metadata: text("metadata"), // JSON
-  createdAt: timestamps.createdAt,
+// 14. SHIPPING RATES
+export const shippingRates = pgTable("shipping_rates", {
+  id: serial("id").primaryKey(),
+  region: text("region").notNull(),
+  cost: numeric("cost", { precision: 10, scale: 2 }).notNull(),
+  estimatedDays: text("estimated_days"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
-// ---------------------------------------------------------------------------
-// Rate limiting (fixed-window counters, since Vercel serverless functions
-// share no in-memory state across invocations)
-// ---------------------------------------------------------------------------
+// 15. MARKETING CAMPAIGNS
+export const marketingCampaigns = pgTable("marketing_campaigns", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  channel: text("channel").notNull(),
+  status: text("status").default("draft").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
 
-export const rateLimits = pgTable("rate_limits", {
-  key: text("key").primaryKey(), // e.g. "checkout:1.2.3.4" or "admin-login:1.2.3.4"
-  windowStart: timestamp("window_start", { withTimezone: true }).notNull(),
-  count: integer("count").notNull().default(1),
+// 16. SETTINGS
+export const settings = pgTable("settings", {
+  id: serial("id").primaryKey(),
+  key: text("key").notNull().unique(),
+  value: text("value").notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
