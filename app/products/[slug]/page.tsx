@@ -17,7 +17,7 @@ export async function generateMetadata({
   if (!product) return {};
   return {
     title: product.title,
-    description: product.description.slice(0, 160),
+    description: (product.description ?? "").slice(0, 160),
   };
 }
 
@@ -30,8 +30,10 @@ export default async function ProductPage({
   const product = await getProductBySlug(slug);
   if (!product) notFound();
 
-  const images: string[] = JSON.parse(product.images);
-  const related = (await relatedProducts(product.categoryId, product.slug)).slice(0, 4);
+  const images: string[] = JSON.parse(product.images ?? "[]");
+  const related = (
+    await relatedProducts(product.categoryId, product.slug ?? "")
+  ).slice(0, 4);
 
   return (
     <>
@@ -71,10 +73,10 @@ export default async function ProductPage({
               {product.title}
             </h1>
             <p className="mt-3 text-2xl font-semibold text-navy">
-              {product.currency} {product.sellingPrice.toFixed(2)}
+              {product.currency} {(product.sellingPrice ?? 0).toFixed(2)}
             </p>
             <p className="mt-1 text-sm text-slate">
-              + {product.currency} {product.customerShipping.toFixed(2)} shipping
+              + {product.currency} {(product.customerShipping ?? 0).toFixed(2)} shipping
               &middot; estimated delivery in {product.deliveryEstimateDays} days
             </p>
 
@@ -84,16 +86,16 @@ export default async function ProductPage({
 
             <div className="mt-8">
               <AddToCart
-                productId={product.id}
-                slug={product.slug}
+                productId={String(product.id)}
+                slug={product.slug ?? ""}
                 title={product.title}
                 image={images[0]}
-                unitPrice={product.sellingPrice}
-                customerShipping={product.customerShipping}
+                unitPrice={product.sellingPrice ?? 0}
+                customerShipping={product.customerShipping ?? 0}
                 variants={product.variants.map((v) => ({
-                  id: v.id,
-                  name: v.name,
-                  priceDelta: v.priceDelta,
+                  id: String(v.id),
+                  name: v.name ?? v.title ?? "",
+                  priceDelta: v.priceDelta ?? 0,
                 }))}
                 outOfStock={product.stockStatus === "out_of_stock"}
               />
@@ -109,13 +111,13 @@ export default async function ProductPage({
             {related.map((p) => (
               <ProductCard
                 key={p.id}
-                slug={p.slug}
+                slug={p.slug ?? ""}
                 title={p.title}
-                image={JSON.parse(p.images)[0]}
-                price={p.sellingPrice}
-                currency={p.currency}
-                stockStatus={p.stockStatus}
-                isDemo={p.isDemo}
+                image={JSON.parse(p.images ?? "[]")[0]}
+                price={p.sellingPrice ?? 0}
+                currency={p.currency ?? "UGX"}
+                stockStatus={p.stockStatus ?? ""}
+                isDemo={p.isDemo ?? false}
               />
             ))}
           </div>

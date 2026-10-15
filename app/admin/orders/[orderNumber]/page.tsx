@@ -33,11 +33,11 @@ export default async function AdminOrderDetail({
     .where(eq(fulfillments.orderId, order.id))
     .limit(1);
 
-  const supplierCostTotal = items.reduce((sum, i) => sum + i.unitSupplierCost * i.quantity, 0);
+  const supplierCostTotal = items.reduce((sum, i) => sum + (i.unitSupplierCost ?? 0) * i.quantity, 0);
 
   const profit = calculateProfit({
-    sellingPrice: order.subtotal,
-    customerShipping: order.shippingTotal,
+    sellingPrice: order.subtotal ?? 0,
+    customerShipping: order.shippingTotal ?? 0,
     supplierCost: supplierCostTotal,
     supplierShipping: fulfillment?.supplierCost ?? 0,
   });
@@ -45,20 +45,20 @@ export default async function AdminOrderDetail({
   async function updateStatusAction(formData: FormData) {
     "use server";
     const status = formData.get("status") as string;
-    await updateOrderStatus(order.id, status);
+    await updateOrderStatus(String(order.id), status);
   }
 
   async function sendToSupplierAction(formData: FormData) {
     "use server";
     const ref = formData.get("supplierOrderRef") as string;
     const cost = parseFloat(formData.get("supplierCost") as string);
-    await sendToSupplier(order.id, ref, cost);
+    await sendToSupplier(String(order.id), ref, cost);
   }
 
   async function addTrackingAction(formData: FormData) {
     "use server";
     await addTrackingInfo(
-      order.id,
+      String(order.id),
       formData.get("trackingNumber") as string,
       formData.get("carrier") as string,
       formData.get("trackingUrl") as string,
@@ -90,9 +90,9 @@ export default async function AdminOrderDetail({
             ))}
           </ul>
           <div className="mt-3 border-t border-border pt-3 text-sm">
-            <div className="flex justify-between text-slate"><span>Subtotal</span><span>${order.subtotal.toFixed(2)}</span></div>
-            <div className="flex justify-between text-slate"><span>Shipping</span><span>${order.shippingTotal.toFixed(2)}</span></div>
-            <div className="flex justify-between font-semibold text-navy"><span>Total</span><span>${order.total.toFixed(2)}</span></div>
+            <div className="flex justify-between text-slate"><span>Subtotal</span><span>${(order.subtotal ?? 0).toFixed(2)}</span></div>
+            <div className="flex justify-between text-slate"><span>Shipping</span><span>${(order.shippingTotal ?? 0).toFixed(2)}</span></div>
+            <div className="flex justify-between font-semibold text-navy"><span>Total</span><span>${(order.total ?? 0).toFixed(2)}</span></div>
           </div>
         </div>
 
@@ -101,7 +101,7 @@ export default async function AdminOrderDetail({
           <ul className="mt-3 space-y-2 text-sm">
             {orderPayments.map((p) => (
               <li key={p.id} className="flex justify-between">
-                <span>{p.provider} &middot; {p.txRef.slice(0, 20)}…</span>
+                <span>{p.provider} &middot; {(p.txRef ?? p.reference ?? "").slice(0, 20)}…</span>
                 <span className={p.status === "successful" ? "text-green-700" : "text-slate"}>
                   {p.status}
                 </span>

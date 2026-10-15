@@ -56,16 +56,22 @@ export async function getProductBySlug(slug: string) {
     .from(productVariants)
     .where(eq(productVariants.productId, product.id));
 
-  const [supplier] = await db
-    .select({ processingTimeDays: suppliers.processingTimeDays })
-    .from(suppliers)
-    .where(eq(suppliers.id, product.supplierId))
-    .limit(1);
+  const supplier = product.supplierId
+    ? (
+        await db
+          .select({ processingTimeDays: suppliers.processingTimeDays })
+          .from(suppliers)
+          .where(eq(suppliers.id, product.supplierId))
+          .limit(1)
+      )[0]
+    : undefined;
 
   return { ...product, variants, supplierProcessingDays: supplier?.processingTimeDays };
 }
 
-export async function relatedProducts(categoryId: string, excludeSlug: string) {
+export async function relatedProducts(categoryId: number | null, excludeSlug: string) {
+  if (!categoryId) return [];
+
   const rows = await db
     .select()
     .from(products)

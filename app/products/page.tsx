@@ -76,13 +76,13 @@ export default async function ProductsPage({
             {items.map((p) => (
               <ProductCard
                 key={p.id}
-                slug={p.slug}
+                slug={p.slug ?? ""}
                 title={p.title}
-                image={JSON.parse(p.images)[0]}
-                price={p.sellingPrice}
-                currency={p.currency}
-                stockStatus={p.stockStatus}
-                isDemo={p.isDemo}
+                image={JSON.parse(p.images ?? "[]")[0]}
+                price={p.sellingPrice ?? 0}
+                currency={p.currency ?? "UGX"}
+                stockStatus={p.stockStatus ?? ""}
+                isDemo={p.isDemo ?? false}
               />
             ))}
           </div>

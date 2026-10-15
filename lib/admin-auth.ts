@@ -13,6 +13,7 @@ import { db } from "./db/client";
 import { admins } from "./db/schema";
 import { eq } from "drizzle-orm";
 import bcrypt from "bcryptjs";
+import type { NextRequest } from "next/server";
 
 export const ADMIN_COOKIE = "swd_admin_session";
 const SESSION_TTL_SECONDS = 60 * 60 * 8; // 8 hours
@@ -96,6 +97,14 @@ export async function isValidSessionToken(token: string | undefined | null): Pro
   return (await verifySessionToken(token)) !== null;
 }
 
+// For admin-only route handlers under app/api/admin/** — proxy.ts only
+// guards page routes under /admin/:path*, not /api/admin/:path*, so every
+// admin API route must call this itself.
+export async function requireAdminSession(req: NextRequest): Promise<SessionPayload | null> {
+  const token = req.cookies.get(ADMIN_COOKIE)?.value;
+  return verifySessionToken(token);
+}
+
 // Node-runtime only (bcrypt) — used from the login route and server
 // actions, never from proxy.ts (Edge).
 export async function checkAdminCredentials(
@@ -110,7 +119,7 @@ export async function checkAdminCredentials(
     return null;
   }
   const ok = await bcrypt.compare(password, admin.passwordHash);
-  return ok ? { id: admin.id, email: admin.email, name: admin.name } : null;
+  return ok ? { id: String(admin.id), email: admin.email, name: admin.name ?? admin.email } : null;
 }
 
 export async function hashPassword(password: string): Promise<string> {

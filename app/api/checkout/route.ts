@@ -50,8 +50,8 @@ export async function POST(req: NextRequest) {
 
   // Re-price every line item from the database.
   const resolvedItems: {
-    productId: string;
-    variantId?: string;
+    productId: number;
+    variantId?: number;
     quantity: number;
     unitPrice: number;
     unitSupplierCost: number;
@@ -59,7 +59,11 @@ export async function POST(req: NextRequest) {
   }[] = [];
 
   for (const item of body.items) {
-    const [product] = await db.select().from(products).where(eq(products.id, item.productId)).limit(1);
+    const [product] = await db
+      .select()
+      .from(products)
+      .where(eq(products.id, Number(item.productId)))
+      .limit(1);
     if (!product || product.status !== "published") {
       return NextResponse.json({ error: `Product unavailable: ${item.productId}` }, { status: 400 });
     }
@@ -68,26 +72,28 @@ export async function POST(req: NextRequest) {
     }
 
     let priceDelta = 0;
+    let variantId: number | undefined;
     if (item.variantId) {
       const [variant] = await db
         .select()
         .from(productVariants)
-        .where(eq(productVariants.id, item.variantId))
+        .where(eq(productVariants.id, Number(item.variantId)))
         .limit(1);
       if (!variant) {
         return NextResponse.json({ error: "Invalid product variant" }, { status: 400 });
       }
-      priceDelta = variant.priceDelta;
+      priceDelta = variant.priceDelta ?? 0;
+      variantId = variant.id;
     }
 
-    const unitPrice = computeUnitPrice(product.sellingPrice, priceDelta);
+    const unitPrice = computeUnitPrice(product.sellingPrice ?? 0, priceDelta);
     resolvedItems.push({
       productId: product.id,
-      variantId: item.variantId,
+      variantId,
       quantity: item.quantity,
       unitPrice,
-      unitSupplierCost: product.supplierCost,
-      customerShipping: product.customerShipping,
+      unitSupplierCost: product.supplierCost ?? 0,
+      customerShipping: product.customerShipping ?? 0,
     });
   }
 

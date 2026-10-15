@@ -30,41 +30,45 @@ async function dispatch(input: NotificationInput) {
 type OrderLike = typeof orders.$inferSelect;
 
 export async function notifyOrderReceived(order: OrderLike, items: { unitPrice: number; quantity: number }[]) {
+  if (!order.email) return;
   await dispatch({
     to: order.email,
     subject: `SWD order ${order.orderNumber} received`,
     text:
-      `Hi ${order.fullName},\n\nWe've received your order ${order.orderNumber} ` +
-      `for ${order.currency} ${order.total.toFixed(2)} (${items.length} item(s)). ` +
+      `Hi ${order.fullName ?? "there"},\n\nWe've received your order ${order.orderNumber} ` +
+      `for ${order.currency} ${(order.total ?? 0).toFixed(2)} (${items.length} item(s)). ` +
       `You'll get another message once payment is confirmed.\n\n— SWD`,
   });
 }
 
 export async function notifyPaymentConfirmed(order: OrderLike) {
+  if (!order.email) return;
   await dispatch({
     to: order.email,
     subject: `Payment confirmed — SWD order ${order.orderNumber}`,
     text:
-      `Hi ${order.fullName},\n\nPayment for order ${order.orderNumber} is confirmed. ` +
+      `Hi ${order.fullName ?? "there"},\n\nPayment for order ${order.orderNumber} is confirmed. ` +
       `We're preparing it for fulfillment.\n\n— SWD`,
   });
 }
 
 export async function notifyShipped(order: OrderLike, trackingNumber?: string | null, carrier?: string | null) {
+  if (!order.email) return;
   await dispatch({
     to: order.email,
     subject: `Your SWD order ${order.orderNumber} has shipped`,
     text:
-      `Hi ${order.fullName},\n\nOrder ${order.orderNumber} is on its way` +
+      `Hi ${order.fullName ?? "there"},\n\nOrder ${order.orderNumber} is on its way` +
       (trackingNumber ? ` — tracking: ${trackingNumber}${carrier ? ` (${carrier})` : ""}.` : ".") +
       `\n\n— SWD`,
   });
 }
 
 export async function notifyDelivered(order: OrderLike) {
+  if (!order.email) return;
   await dispatch({
     to: order.email,
     subject: `SWD order ${order.orderNumber} delivered`,
-    text: `Hi ${order.fullName},\n\nOrder ${order.orderNumber} has been delivered. Thanks for shopping with SWD.\n\n— SWD`,
+    text: `Hi ${order.fullName ?? "there"},\n\nOrder ${order.orderNumber} has been delivered. Thanks for shopping with SWD.\n\n— SWD`,
   });
 }

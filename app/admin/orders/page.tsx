@@ -36,7 +36,7 @@ export default async function AdminOrdersPage() {
                   </Link>
                 </td>
                 <td className="px-4 py-3 text-navy">{o.fullName}</td>
-                <td className="px-4 py-3 text-navy">${o.total.toFixed(2)}</td>
+                <td className="px-4 py-3 text-navy">${(o.total ?? 0).toFixed(2)}</td>
                 <td className="px-4 py-3">
                   <span
                     className={`rounded-full px-2 py-0.5 text-xs ${statusColor[o.status] ?? "bg-light text-slate"}`}

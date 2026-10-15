@@ -28,7 +28,9 @@ export async function checkRateLimit(
 
     const now = new Date();
     const windowExpired =
-      !row || now.getTime() - new Date(row.windowStart).getTime() > windowSeconds * 1000;
+      !row ||
+      !row.windowStart ||
+      now.getTime() - row.windowStart.getTime() > windowSeconds * 1000;
 
     if (windowExpired) {
       await tx

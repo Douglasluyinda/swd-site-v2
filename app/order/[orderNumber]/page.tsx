@@ -94,15 +94,15 @@ export default async function OrderPage({
         <div className="mt-4 space-y-1.5 border-t border-border pt-4 text-[15px]">
           <div className="flex justify-between text-slate">
             <span>Subtotal</span>
-            <span>${order.subtotal.toFixed(2)}</span>
+            <span>${(order.subtotal ?? 0).toFixed(2)}</span>
           </div>
           <div className="flex justify-between text-slate">
             <span>Shipping</span>
-            <span>${order.shippingTotal.toFixed(2)}</span>
+            <span>${(order.shippingTotal ?? 0).toFixed(2)}</span>
           </div>
           <div className="flex justify-between font-semibold text-navy">
             <span>Total</span>
-            <span>${order.total.toFixed(2)}</span>
+            <span>${(order.total ?? 0).toFixed(2)}</span>
           </div>
         </div>
       </div>

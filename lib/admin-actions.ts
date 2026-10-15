@@ -16,7 +16,8 @@ const trackingStatusByOrderStatus: Record<string, string | undefined> = {
   DELIVERED: "delivered",
 };
 
-export async function updateOrderStatus(orderId: string, status: string) {
+export async function updateOrderStatus(orderIdInput: string, status: string) {
+  const orderId = Number(orderIdInput);
   await db.update(orders).set({ status, updatedAt: new Date() }).where(eq(orders.id, orderId));
 
   const trackingStatus = trackingStatusByOrderStatus[status];
@@ -32,7 +33,8 @@ export async function updateOrderStatus(orderId: string, status: string) {
   revalidatePath("/admin/orders");
 }
 
-export async function sendToSupplier(orderId: string, supplierOrderRef: string, supplierCost: number) {
+export async function sendToSupplier(orderIdInput: string, supplierOrderRef: string, supplierCost: number) {
+  const orderId = Number(orderIdInput);
   const [existing] = await db
     .select()
     .from(fulfillments)
@@ -59,11 +61,12 @@ export async function sendToSupplier(orderId: string, supplierOrderRef: string, 
 }
 
 export async function addTrackingInfo(
-  orderId: string,
+  orderIdInput: string,
   trackingNumber: string,
   carrier: string,
   trackingUrl: string,
 ) {
+  const orderId = Number(orderIdInput);
   const [existing] = await db
     .select()
     .from(fulfillments)
@@ -94,7 +97,8 @@ export async function addTrackingInfo(
   revalidatePath("/admin/orders");
 }
 
-export async function toggleProductStatus(productId: string, status: string) {
+export async function toggleProductStatus(productIdInput: string, status: string) {
+  const productId = Number(productIdInput);
   await db.update(products).set({ status, updatedAt: new Date() }).where(eq(products.id, productId));
   revalidatePath("/admin/products");
   revalidatePath("/products");
@@ -104,14 +108,17 @@ export async function createProduct(formData: FormData) {
   const title = formData.get("title") as string;
   const slug = (formData.get("slug") as string) || title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
 
+  const categoryIdRaw = formData.get("categoryId") as string;
+  const supplierIdRaw = formData.get("supplierId") as string;
+
   await db.insert(products).values({
     sku: formData.get("sku") as string,
     title,
     slug,
     description: formData.get("description") as string,
-    categoryId: formData.get("categoryId") as string,
+    categoryId: categoryIdRaw ? Number(categoryIdRaw) : null,
     images: JSON.stringify([(formData.get("image") as string) || "/demo/portable-blender-1.svg"]),
-    supplierId: formData.get("supplierId") as string,
+    supplierId: supplierIdRaw ? Number(supplierIdRaw) : null,
     supplierSku: formData.get("supplierSku") as string,
     supplierCost: parseFloat(formData.get("supplierCost") as string),
     supplierShipping: parseFloat(formData.get("supplierShipping") as string),
@@ -179,7 +186,8 @@ export async function createCoupon(formData: FormData) {
   revalidatePath("/admin/coupons");
 }
 
-export async function toggleCouponActive(couponId: string, active: boolean) {
+export async function toggleCouponActive(couponIdInput: string, active: boolean) {
+  const couponId = Number(couponIdInput);
   await db.update(coupons).set({ active }).where(eq(coupons.id, couponId));
   revalidatePath("/admin/coupons");
 }

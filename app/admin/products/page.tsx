@@ -13,7 +13,7 @@ export default async function AdminProductsPage() {
   const allCategories = await db.select().from(categories);
   const allSuppliers = await db.select().from(suppliers);
 
-  const categoryName = (id: string) => allCategories.find((c) => c.id === id)?.name ?? "—";
+  const categoryName = (id: number | null) => allCategories.find((c) => c.id === id)?.name ?? "—";
 
   async function toggleAction(formData: FormData) {
     "use server";
@@ -66,7 +66,7 @@ export default async function AdminProductsPage() {
                   )}
                 </td>
                 <td className="px-4 py-3 text-slate">{categoryName(p.categoryId)}</td>
-                <td className="px-4 py-3 text-navy">${p.sellingPrice.toFixed(2)}</td>
+                <td className="px-4 py-3 text-navy">${(p.sellingPrice ?? 0).toFixed(2)}</td>
                 <td className="px-4 py-3 text-slate">{p.stockStatus}</td>
                 <td className="px-4 py-3">
                   <span className={`rounded-full px-2 py-0.5 text-xs ${statusColor[p.status]}`}>

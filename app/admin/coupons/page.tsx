@@ -47,7 +47,7 @@ export default async function AdminCouponsPage() {
                   </span>
                 </td>
                 <td className="px-4 py-3">
-                  <form action={async () => { "use server"; await toggleCouponActive(c.id, !c.active); }}>
+                  <form action={async () => { "use server"; await toggleCouponActive(String(c.id), !c.active); }}>
                     <button className="text-sm text-blue hover:underline">
                       {c.active ? "Deactivate" : "Activate"}
                     </button>

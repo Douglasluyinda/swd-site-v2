@@ -15,6 +15,13 @@
       "when": 1791282457372,
       "tag": "0001_awesome_spot",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1791915583239,
+      "tag": "0002_restore_order_lifecycle_fields",
+      "breakpoints": true
     }
   ]
 }
