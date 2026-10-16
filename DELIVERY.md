@@ -140,6 +140,10 @@ has real production data you don't want to risk with `push`.
   called on return from Flutterwave for immediate feedback
 - `POST /api/coupons/validate` — checks a code before checkout submits
 - `POST /api/admin/login` / `POST /api/admin/logout` — admin session
+- `POST /api/admin/dsers/sync-order` — admin-only; pushes a paid
+  order's items/shipping details to DSers (see section M)
+- `POST /api/webhooks/dsers` — verified fulfillment-status callback
+  from DSers (tracking number, carrier, shipped/delivered)
 - Admin mutations (order status, send-to-supplier, tracking, product/
   supplier/category/coupon/admin creation) are Server Actions
   (`lib/admin-actions.ts`)
@@ -156,6 +160,13 @@ has real production data you don't want to risk with `push`.
 | `NEXT_PUBLIC_SITE_URL` | Payments | Production URL, used as the Flutterwave redirect target |
 | `RESEND_API_KEY` | Notifications (optional) | Order-lifecycle emails no-op without it |
 | `EMAIL_FROM` | Notifications (optional) | e.g. `"SWD <orders@yourdomain.com>"` |
+| `DSERS_API_URL` | DSers sync (optional) | Base URL of the DSers Open API |
+| `DSERS_API_KEY` | DSers sync (optional) | Server-side Bearer token |
+| `DSERS_WEBHOOK_SECRET` | DSers webhook (optional) | Echoed back in the `x-dsers-webhook-secret` header |
+| `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` | SMS/WhatsApp (optional) | Shared by both channels |
+| `TWILIO_SMS_FROM` | SMS (optional) | E.164 Twilio number |
+| `TWILIO_WHATSAPP_FROM` | WhatsApp (optional) | WhatsApp-enabled Twilio number, e.g. `whatsapp:+1...` |
+| `BLOB_READ_WRITE_TOKEN` | Product image uploads (optional) | From Vercel Project → Storage → Blob |
 
 `lib/db/client.ts` throws immediately if `DATABASE_URL` is missing;
 checkout returns a clear 502 (order still saved as `PAYMENT_PENDING`)
@@ -195,10 +206,41 @@ chooses, triggered manually via "Send to Supplier."
    number — this also sends the shipped-notification email if
    configured
 
-Phase 3 (supplier API integration, automated fulfillment) is
-deliberately not built — it's provider-specific and needs a specific
-supplier platform picked first. The schema has room for it
-(`suppliers.apiCapable`, `products.supplierUrl`).
+## M. Supplier API integration (DSers) — Phase 3
+
+Built as an addition on top of the manual flow above, not a
+replacement — "Send to Supplier" still works for non-DSers suppliers.
+
+- `POST /api/admin/dsers/sync-order` (`{ orderId }`) — requires an
+  admin session; refuses to run on an unpaid order, refuses if any
+  line item's product has no `dsers_product_id` mapped, and is
+  idempotent (re-calling it on an already-synced order returns the
+  existing `dsersOrderId` instead of sending a duplicate). On success
+  it creates/updates the order's `fulfillments` row
+  (`status: "sent"`, `dsersOrderId` set) and moves the order to
+  `SUPPLIER_ORDERED`.
+- `POST /api/webhooks/dsers` — verifies the shared-secret header,
+  looks up the order by the `dsersOrderId` stored during sync,
+  upserts `trackingNumber`/`carrier`/`trackingUrl` into
+  `fulfillments`, and sets `orders.fulfillmentStatus = "fulfilled"`
+  (plus the fuller `orders.status`: `SHIPPED`/`DELIVERED`/`CANCELLED`
+  depending on the payload). Idempotent — a duplicate webhook delivery
+  that changes nothing is a no-op.
+- `lib/dsers.ts` holds the request/response shaping, the webhook
+  signature check, and the DSers-status → internal-status mapping in
+  one place — same pattern as `lib/payments/flutterwave.ts`. The
+  exact endpoint path, field names, and webhook header are a
+  reasonable default; confirm them against your actual DSers
+  account/docs before relying on this live (noted in the file).
+- **Merchant-of-record boundary preserved**: this integration only
+  ever exchanges fulfillment data (order + shipping details out,
+  tracking status in). Nothing here authorizes a payment or lets
+  DSers charge the customer or get paid directly — SWD pays/manages
+  DSers as its own separate, SWD-controlled operation, same as the
+  manual "Send to Supplier" flow.
+
+Phase 4 (marketing automation) is still not built — no spec yet for
+what it should send or to whom.
 
 ## G. How to create a product
 
@@ -252,23 +294,34 @@ Created as `draft` — "Publish" in the list to make it live.
 ## J. Automated tests
 
 ```
-npm test
+npm test        # unit + integration (Vitest)
+npm run test:e2e  # browser tests (Playwright) — needs the app buildable/startable
 ```
 
-26 tests across 6 files, all passing as of this delivery — 4 pure
-unit-test files (pricing, profit engine, coupon math, webhook
-signature verification) plus 2 integration-test files that run
+33 Vitest tests across 7 files — unit tests (pricing, profit engine,
+coupon math, Flutterwave/DSers webhook signature verification,
+notification channel dispatch) plus 2 integration-test files that run
 against a real Postgres database (order-number atomicity, rate-limit
 correctness), both exercising real concurrency rather than asserting
 against a single call. `vitest.config.ts` / `vitest.setup.ts` load
-`.env` automatically.
+`.env` automatically; the integration tests need `DATABASE_URL` set
+there, pointed at a non-production database — they insert real rows.
+
+Browser coverage added via Playwright (`e2e/`): admin-auth boundary
+(redirect-to-login, preserved `?next=`, bad-credentials error) and
+storefront navigation (homepage, product search, cart). These run
+`next build && next start` against whatever `DATABASE_URL` is
+configured, so point `.env.local` at a non-production database before
+running them if you'd rather not exercise read queries against live
+data. `playwright.config.ts` supports `PLAYWRIGHT_CHROMIUM_PATH` to
+point at a pre-installed Chromium binary instead of downloading one
+(useful in sandboxed CI).
 
 Not covered yet: the checkout → payment → webhook round trip
 end-to-end (would need a Flutterwave sandbox account to test against
-honestly, rather than mocking the one API call that matters most),
-and no UI/browser tests — the flows in this document were verified
-manually via Playwright screenshots during development, not captured
-as a repeatable test suite.
+honestly, rather than mocking the one API call that matters most), and
+a real DSers sandbox round trip (same reason — `DSERS_API_URL`/
+`DSERS_API_KEY` from a real DSers account).
 
 ## K. What genuinely cannot be finished without your own accounts
 
@@ -288,17 +341,70 @@ credentials only you can obtain:
 3. **A Resend (or other) API key**, if you want order emails to
    actually send rather than log a skip line.
 
-## L. Remaining production-readiness tasks (lower priority)
+## L. Status of the former "remaining tasks" list
 
-1. UI/browser test coverage (Playwright), beyond the manual QA done
-   during development
-2. Product image hosting (Vercel Blob, S3, Cloudinary) — currently
-   local placeholder SVGs for the demo product
-3. Phase 3 (supplier API integration) and Phase 4 (analytics,
-   marketing automation) — deliberately deferred per the spec's own
-   phasing
-4. SMS/WhatsApp notification channels (email is built; the
-   `NotificationChannel` interface supports adding more without
-   touching call sites)
-5. Versioned DB migrations instead of `drizzle-kit push`, once there's
-   production data to protect
+All five items below are now built. What's left in each case is
+credentials/data only you can supply — nothing further to code.
+
+1. **UI/browser test coverage (Playwright)** — done (`e2e/`, see
+   section J). 4 of 6 tests pass against a database reachable from
+   where they're run; 2 depend on live DB reads and need to be run
+   somewhere that can reach your `DATABASE_URL`.
+2. **Product image hosting (Vercel Blob)** — done (`lib/blob.ts`,
+   wired into `createProduct`). Needs `BLOB_READ_WRITE_TOKEN` (Vercel
+   Project → Storage → Blob) to activate; falls back to the placeholder
+   SVG until then.
+3. **Phase 3 (DSers supplier integration) and analytics** — done.
+   DSers: `app/api/admin/dsers/sync-order/route.ts` +
+   `app/api/webhooks/dsers/route.ts` (see section M).
+   Analytics: `/admin/analytics` computes real revenue/order-funnel
+   metrics from the database; Vercel Web Analytics + Speed Insights
+   are wired in `app/layout.tsx` and report once deployed on Vercel.
+   Marketing automation (Phase 4) is not built — no spec for what it
+   should send or to whom yet.
+4. **SMS/WhatsApp notification channels** — done (`lib/notifications/
+   sms.ts`, `whatsapp.ts`, shared `twilio-client.ts`), registered
+   alongside email in `lib/notifications/index.ts`. Each channel
+   independently no-ops until its own Twilio env vars are set.
+5. **Versioned DB migrations** — done. `drizzle/0000`–`0002` are
+   checked in; `npm run db:generate` / `npm run db:migrate` replace
+   `drizzle-kit push` going forward.
+
+### Still open — needs you, not more code
+
+- **Real catalogue data.** The only product in the database
+  (`SWD-DEMO-0001`, "Portable Blender (DEMO)") is explicitly labeled
+  DEMO/TEST data (`isDemo: true`, badged on both the storefront and
+  admin product list) and exists only to exercise the checkout →
+  payment → fulfillment pipeline end to end. I have no real SWD
+  product names, suppliers, or prices to replace it with, and didn't
+  invent any — that would misrepresent the business. Add real
+  products through `/admin/products`, or send a product/supplier list
+  and I'll load it via `lib/db/seed.ts`-style script. Delete or
+  unpublish the demo product once real inventory exists.
+- **DSers account credentials** (`DSERS_API_URL`, `DSERS_API_KEY`,
+  `DSERS_WEBHOOK_SECRET`) and each product's `dsers_product_id` /
+  `dsers_variant_id` mapping — sync-order refuses to run until a
+  product has one.
+- **Twilio account** (`TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`,
+  `TWILIO_SMS_FROM`, `TWILIO_WHATSAPP_FROM`) to activate SMS/WhatsApp.
+- **Vercel Blob store** connected to the project for image uploads.
+- **Rotate the Neon database password** if you haven't already —
+  an earlier commit on this repo briefly had real credentials in
+  `.env.example`/`.env.local`; both are fixed now (see the `security:`
+  commit), but the old password should be treated as burned.
+
+### Also fixed along the way
+
+- `app/page.tsx` (the site's actual homepage, `/`) was a duplicate of
+  the Insights "coming soon" page — visiting the live site's root URL
+  showed "Insights, coming soon" instead of the real homepage. Rebuilt
+  it using the existing pillar/principles data in `lib/config.ts` and
+  the established component set (`PillarCard`, `SectionHeader`,
+  `Button`) so it matches the rest of the site rather than introducing
+  a new look.
+- Two pre-existing TypeScript errors on `/products` and
+  `/products/[slug]` (`currency` could be `null`) were blocking a
+  clean `tsc --noEmit`; fixed with a `?? "UGX"` fallback.
+- Vitest was also trying to collect the new Playwright `e2e/**` specs
+  and failing on them — scoped Vitest to exclude `e2e/**`.

@@ -9,3 +9,6 @@ out
 *.db-shm
 *.db-wal
 *.tsbuildinfo
+test-results
+playwright-report
+blob-report

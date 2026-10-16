@@ -4,7 +4,8 @@
 // order-flow code that triggers notifications.
 
 export type NotificationInput = {
-  to: string;
+  to: string; // email address — used by the email channel
+  toPhone?: string; // E.164 phone number — used by SMS/WhatsApp channels
   subject: string;
   text: string;
 };

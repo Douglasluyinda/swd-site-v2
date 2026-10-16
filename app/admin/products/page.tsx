@@ -102,7 +102,11 @@ export default async function AdminProductsPage() {
       <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
         <div className="rounded-xl border border-border bg-white p-5">
           <p className="text-sm font-medium text-slate">Add product</p>
-          <form action={createProductAction} className="mt-3 grid gap-3 sm:grid-cols-2">
+          <form
+            action={createProductAction}
+            encType="multipart/form-data"
+            className="mt-3 grid gap-3 sm:grid-cols-2"
+          >
             <input name="sku" placeholder="SWD SKU" required className="rounded-lg border border-border-strong px-3 py-2 text-sm" />
             <input name="title" placeholder="Title" required className="rounded-lg border border-border-strong px-3 py-2 text-sm" />
             <select name="categoryId" required className="rounded-lg border border-border-strong px-3 py-2 text-sm">
@@ -124,7 +128,22 @@ export default async function AdminProductsPage() {
             <input name="sellingPrice" type="number" step="0.01" placeholder="Selling price ($)" required className="rounded-lg border border-border-strong px-3 py-2 text-sm" />
             <input name="customerShipping" type="number" step="0.01" placeholder="Customer shipping ($)" className="rounded-lg border border-border-strong px-3 py-2 text-sm" />
             <input name="deliveryEstimateDays" placeholder="Delivery estimate (e.g. 7-14)" className="rounded-lg border border-border-strong px-3 py-2 text-sm" />
-            <input name="image" placeholder="Image URL (optional)" className="rounded-lg border border-border-strong px-3 py-2 text-sm" />
+            <div className="sm:col-span-2">
+              <label className="block text-xs text-slate">
+                Product photo (uploaded to Vercel Blob)
+              </label>
+              <input
+                name="imageFile"
+                type="file"
+                accept="image/*"
+                className="mt-1 w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
+              />
+              <input
+                name="image"
+                placeholder="Or paste an image URL instead"
+                className="mt-2 w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
+              />
+            </div>
             <textarea name="description" placeholder="Description" required rows={3} className="sm:col-span-2 rounded-lg border border-border-strong px-3 py-2 text-sm" />
             <button className="sm:col-span-2 rounded-lg bg-blue px-4 py-2 text-sm font-medium text-white">
               Create product (as draft)

@@ -19,7 +19,7 @@ export const emailChannel: NotificationChannel = {
   async send(input: NotificationInput) {
     const apiKey = process.env.RESEND_API_KEY;
     const from = process.env.EMAIL_FROM;
-    if (!apiKey || !from) return;
+    if (!apiKey || !from || !input.to) return;
 
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",

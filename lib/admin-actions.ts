@@ -6,6 +6,7 @@ import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { notifyDelivered, notifyShipped } from "@/lib/notifications";
 import { hashPassword } from "@/lib/admin-auth";
+import { uploadProductImage } from "@/lib/blob";
 
 const trackingStatusByOrderStatus: Record<string, string | undefined> = {
   SUPPLIER_ORDER_PENDING: "supplier_processing",
@@ -111,13 +112,22 @@ export async function createProduct(formData: FormData) {
   const categoryIdRaw = formData.get("categoryId") as string;
   const supplierIdRaw = formData.get("supplierId") as string;
 
+  // Prefer an uploaded photo (stored in Vercel Blob) over a pasted URL;
+  // fall back to the placeholder only if neither is given.
+  const imageFile = formData.get("imageFile");
+  const imageUrlInput = (formData.get("image") as string) ?? "";
+  let imageUrl = imageUrlInput || "/demo/portable-blender-1.svg";
+  if (imageFile instanceof File && imageFile.size > 0) {
+    imageUrl = await uploadProductImage(imageFile);
+  }
+
   await db.insert(products).values({
     sku: formData.get("sku") as string,
     title,
     slug,
     description: formData.get("description") as string,
     categoryId: categoryIdRaw ? Number(categoryIdRaw) : null,
-    images: JSON.stringify([(formData.get("image") as string) || "/demo/portable-blender-1.svg"]),
+    images: JSON.stringify([imageUrl]),
     supplierId: supplierIdRaw ? Number(supplierIdRaw) : null,
     supplierSku: formData.get("supplierSku") as string,
     supplierCost: parseFloat(formData.get("supplierCost") as string),
