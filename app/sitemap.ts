@@ -9,6 +9,7 @@ const routes = [
   "/connect",
   "/business",
   "/products",
+  "/oraimo",
   "/repairs",
   "/contact",
   "/insights",

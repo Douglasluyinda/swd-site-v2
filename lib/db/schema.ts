@@ -88,6 +88,16 @@ export const products = pgTable("products", {
   dsersProductId: text("dsers_product_id"),
   supplierType: text("supplier_type").default("DSERS"),
 
+  // Brand + fulfilment mode. `brand` is free text (not a separate table —
+  // SWD currently carries one brand, Oraimo; normalize later if that grows).
+  // `fulfillmentType` distinguishes SWD-owned inventory (sold and shipped
+  // through SWD's own checkout/fulfillment, the default) from an affiliate
+  // listing (an outbound link to a verified affiliate program — never
+  // processed as SWD stock or added to SWD's own cart/checkout).
+  brand: text("brand"),
+  fulfillmentType: text("fulfillment_type").default("inventory").notNull(),
+  affiliateUrl: text("affiliate_url"),
+
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

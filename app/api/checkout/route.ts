@@ -6,13 +6,15 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db/client";
-import { customers, orderItems, orders, payments, productVariants, products, trackingEvents } from "@/lib/db/schema";
+import { customers, orderItems, orders, payments, productVariants, products, shippingRates, trackingEvents } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { nextOrderNumber } from "@/lib/orders";
 import { getPaymentProvider } from "@/lib/payments";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { notifyOrderReceived } from "@/lib/notifications";
 import { computeUnitPrice, sumCart } from "@/lib/checkout-pricing";
+import { matchDeliveryRate } from "@/lib/delivery";
+import { isPurchasableInStore } from "@/lib/product-fulfillment";
 import { computeDiscount, getValidCoupon } from "@/lib/coupons";
 
 type CheckoutBody = {
@@ -67,6 +69,15 @@ export async function POST(req: NextRequest) {
     if (!product || product.status !== "published") {
       return NextResponse.json({ error: `Product unavailable: ${item.productId}` }, { status: 400 });
     }
+    if (!isPurchasableInStore(product)) {
+      // Affiliate listings are fulfilled off-site and must never be
+      // processed as SWD inventory orders, even if a client somehow
+      // submits one (the UI never offers "Add to cart" for these).
+      return NextResponse.json(
+        { error: `${product.title} is an affiliate listing — purchase it via the partner link.` },
+        { status: 400 },
+      );
+    }
     if (product.stockStatus === "out_of_stock") {
       return NextResponse.json({ error: `Out of stock: ${product.title}` }, { status: 409 });
     }
@@ -97,7 +108,17 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  const { subtotal, shippingTotal, total: preDiscountTotal } = sumCart(resolvedItems);
+  const { subtotal, shippingTotal: perProductShippingTotal } = sumCart(resolvedItems);
+
+  // A configured regional rate (Admin → Shipping) overrides the
+  // per-product shipping sum for a matching address — e.g. a flat
+  // Entebbe delivery fee instead of summing each item's own shipping
+  // cost. Falls back to the per-product sum when no rate matches, so
+  // this is a no-op until an admin configures one.
+  const configuredRates = await db.select().from(shippingRates);
+  const deliveryRate = matchDeliveryRate(configuredRates, body.city, body.country);
+  const shippingTotal = deliveryRate ? deliveryRate.cost : perProductShippingTotal;
+  const preDiscountTotal = subtotal + shippingTotal;
 
   let discountTotal = 0;
   if (body.couponCode) {

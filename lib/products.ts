@@ -4,7 +4,15 @@ import { and, eq, like, or } from "drizzle-orm";
 
 export type ProductListItem = Awaited<ReturnType<typeof listProducts>>[number];
 
-export async function listProducts(opts?: { categorySlug?: string; search?: string }) {
+// Fulfilment-type rules (affiliate vs. SWD inventory) live in
+// lib/product-fulfillment.ts — a DB-free module so they're unit-testable
+// without DATABASE_URL set.
+
+export async function listProducts(opts?: {
+  categorySlug?: string;
+  search?: string;
+  brand?: string;
+}) {
   const conditions = [eq(products.status, "published")];
 
   if (opts?.search) {
@@ -12,6 +20,9 @@ export async function listProducts(opts?: { categorySlug?: string; search?: stri
     conditions.push(
       or(like(products.title, term), like(products.description, term))!,
     );
+  }
+  if (opts?.brand) {
+    conditions.push(eq(products.brand, opts.brand));
   }
 
   const rows = await db
@@ -26,6 +37,9 @@ export async function listProducts(opts?: { categorySlug?: string; search?: stri
       stockStatus: products.stockStatus,
       deliveryEstimateDays: products.deliveryEstimateDays,
       isDemo: products.isDemo,
+      brand: products.brand,
+      fulfillmentType: products.fulfillmentType,
+      affiliateUrl: products.affiliateUrl,
       categorySlug: categories.slug,
       categoryName: categories.name,
     })

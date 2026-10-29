@@ -208,7 +208,7 @@ export default function CheckoutPage() {
               <span>${subtotal.toFixed(2)}</span>
             </div>
             <div className="flex justify-between text-slate">
-              <span>Shipping</span>
+              <span>Shipping (estimate)</span>
               <span>${shippingTotal.toFixed(2)}</span>
             </div>
             {appliedCoupon && (

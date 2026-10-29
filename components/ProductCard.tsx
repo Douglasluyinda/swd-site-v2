@@ -9,6 +9,8 @@ type ProductCardProps = {
   currency: string;
   stockStatus: string;
   isDemo?: boolean;
+  brand?: string | null;
+  fulfillmentType?: string | null;
 };
 
 const stockLabel: Record<string, string> = {
@@ -25,6 +27,8 @@ export function ProductCard({
   currency,
   stockStatus,
   isDemo,
+  brand,
+  fulfillmentType,
 }: ProductCardProps) {
   return (
     <Link
@@ -46,6 +50,7 @@ export function ProductCard({
         )}
       </div>
       <div className="p-4">
+        {brand && <p className="text-xs font-medium text-blue">{brand}</p>}
         <p className="text-[15px] font-medium text-navy group-hover:underline">
           {title}
         </p>
@@ -58,7 +63,7 @@ export function ProductCard({
               stockStatus === "out_of_stock" ? "text-red-600" : "text-slate"
             }`}
           >
-            {stockLabel[stockStatus] ?? stockStatus}
+            {fulfillmentType === "affiliate" ? "Via partner link" : stockLabel[stockStatus] ?? stockStatus}
           </span>
         </div>
       </div>

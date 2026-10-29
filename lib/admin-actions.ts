@@ -1,12 +1,13 @@
 "use server";
 
 import { db } from "@/lib/db/client";
-import { fulfillments, orders, trackingEvents, products, suppliers, categories, admins, coupons } from "@/lib/db/schema";
+import { fulfillments, orders, trackingEvents, products, suppliers, categories, admins, coupons, shippingRates } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { notifyDelivered, notifyShipped } from "@/lib/notifications";
 import { hashPassword } from "@/lib/admin-auth";
 import { uploadProductImage } from "@/lib/blob";
+import { validateProductFulfillment } from "@/lib/product-fulfillment";
 
 const trackingStatusByOrderStatus: Record<string, string | undefined> = {
   SUPPLIER_ORDER_PENDING: "supplier_processing",
@@ -111,6 +112,16 @@ export async function createProduct(formData: FormData) {
 
   const categoryIdRaw = formData.get("categoryId") as string;
   const supplierIdRaw = formData.get("supplierId") as string;
+  const brand = ((formData.get("brand") as string) || "").trim() || null;
+  const fulfillmentType = (formData.get("fulfillmentType") as string) === "affiliate" ? "affiliate" : "inventory";
+  const affiliateUrl = ((formData.get("affiliateUrl") as string) || "").trim() || null;
+
+  const fulfillmentError = validateProductFulfillment({
+    fulfillmentType,
+    affiliateUrl,
+    supplierId: supplierIdRaw ? Number(supplierIdRaw) : null,
+  });
+  if (fulfillmentError) throw new Error(fulfillmentError);
 
   // Prefer an uploaded photo (stored in Vercel Blob) over a pasted URL;
   // fall back to the placeholder only if neither is given.
@@ -128,10 +139,13 @@ export async function createProduct(formData: FormData) {
     description: formData.get("description") as string,
     categoryId: categoryIdRaw ? Number(categoryIdRaw) : null,
     images: JSON.stringify([imageUrl]),
+    brand,
+    fulfillmentType,
+    affiliateUrl,
     supplierId: supplierIdRaw ? Number(supplierIdRaw) : null,
-    supplierSku: formData.get("supplierSku") as string,
-    supplierCost: parseFloat(formData.get("supplierCost") as string),
-    supplierShipping: parseFloat(formData.get("supplierShipping") as string),
+    supplierSku: (formData.get("supplierSku") as string) || null,
+    supplierCost: parseFloat(formData.get("supplierCost") as string) || null,
+    supplierShipping: parseFloat(formData.get("supplierShipping") as string) || null,
     supplierStock: parseInt(formData.get("supplierStock") as string, 10) || 0,
     deliveryEstimateDays: (formData.get("deliveryEstimateDays") as string) || "7-14",
     sellingPrice: parseFloat(formData.get("sellingPrice") as string),
@@ -200,4 +214,27 @@ export async function toggleCouponActive(couponIdInput: string, active: boolean)
   const couponId = Number(couponIdInput);
   await db.update(coupons).set({ active }).where(eq(coupons.id, couponId));
   revalidatePath("/admin/coupons");
+}
+
+// Region names are matched case-insensitively against the customer's
+// entered city, then country, at checkout (lib/delivery.ts) — "Entebbe"
+// matches an order with city "Entebbe", "Uganda" matches any order in
+// Uganda whose city has no more specific rate configured.
+export async function createShippingRate(formData: FormData) {
+  const region = ((formData.get("region") as string) || "").trim();
+  const costRaw = formData.get("cost") as string;
+  const estimatedDays = ((formData.get("estimatedDays") as string) || "").trim() || null;
+
+  if (!region) throw new Error("Region is required.");
+  const cost = parseFloat(costRaw);
+  if (!Number.isFinite(cost) || cost < 0) throw new Error("Cost must be a non-negative number.");
+
+  await db.insert(shippingRates).values({ region, cost, estimatedDays });
+  revalidatePath("/admin/shipping");
+}
+
+export async function deleteShippingRate(rateIdInput: string) {
+  const rateId = Number(rateIdInput);
+  await db.delete(shippingRates).where(eq(shippingRates.id, rateId));
+  revalidatePath("/admin/shipping");
 }

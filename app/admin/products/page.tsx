@@ -58,10 +58,16 @@ export default async function AdminProductsPage() {
             {allProducts.map((p) => (
               <tr key={p.id} className="border-b border-border last:border-0">
                 <td className="px-4 py-3 text-navy">
+                  {p.brand && <span className="text-xs text-blue">{p.brand} · </span>}
                   {p.title}
                   {p.isDemo && (
                     <span className="ml-2 rounded-full bg-navy/10 px-2 py-0.5 text-[10px] text-navy">
                       DEMO
+                    </span>
+                  )}
+                  {p.fulfillmentType === "affiliate" && (
+                    <span className="ml-2 rounded-full bg-blue/10 px-2 py-0.5 text-[10px] text-blue">
+                      AFFILIATE
                     </span>
                   )}
                 </td>
@@ -109,22 +115,35 @@ export default async function AdminProductsPage() {
           >
             <input name="sku" placeholder="SWD SKU" required className="rounded-lg border border-border-strong px-3 py-2 text-sm" />
             <input name="title" placeholder="Title" required className="rounded-lg border border-border-strong px-3 py-2 text-sm" />
+            <input name="brand" placeholder="Brand (e.g. Oraimo) — optional" className="rounded-lg border border-border-strong px-3 py-2 text-sm" />
             <select name="categoryId" required className="rounded-lg border border-border-strong px-3 py-2 text-sm">
               <option value="">Category…</option>
               {allCategories.map((c) => (
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </select>
-            <select name="supplierId" required className="rounded-lg border border-border-strong px-3 py-2 text-sm">
-              <option value="">Supplier…</option>
+            <div className="sm:col-span-2">
+              <label className="block text-xs text-slate">Fulfilment</label>
+              <select name="fulfillmentType" defaultValue="inventory" className="mt-1 w-full rounded-lg border border-border-strong px-3 py-2 text-sm">
+                <option value="inventory">SWD inventory — sourced, stocked, sold through SWD checkout</option>
+                <option value="affiliate">Affiliate link — outbound to a verified partner, not SWD stock</option>
+              </select>
+              <input
+                name="affiliateUrl"
+                placeholder="Affiliate link (required if Fulfilment = Affiliate)"
+                className="mt-2 w-full rounded-lg border border-border-strong px-3 py-2 text-sm"
+              />
+            </div>
+            <select name="supplierId" className="rounded-lg border border-border-strong px-3 py-2 text-sm">
+              <option value="">Supplier… (required for SWD inventory)</option>
               {allSuppliers.map((s) => (
                 <option key={s.id} value={s.id}>{s.name}</option>
               ))}
             </select>
-            <input name="supplierSku" placeholder="Supplier SKU" required className="rounded-lg border border-border-strong px-3 py-2 text-sm" />
+            <input name="supplierSku" placeholder="Supplier SKU" className="rounded-lg border border-border-strong px-3 py-2 text-sm" />
             <input name="supplierStock" type="number" placeholder="Supplier stock" className="rounded-lg border border-border-strong px-3 py-2 text-sm" />
-            <input name="supplierCost" type="number" step="0.01" placeholder="Supplier cost ($)" required className="rounded-lg border border-border-strong px-3 py-2 text-sm" />
-            <input name="supplierShipping" type="number" step="0.01" placeholder="Supplier shipping ($)" required className="rounded-lg border border-border-strong px-3 py-2 text-sm" />
+            <input name="supplierCost" type="number" step="0.01" placeholder="Supplier cost ($)" className="rounded-lg border border-border-strong px-3 py-2 text-sm" />
+            <input name="supplierShipping" type="number" step="0.01" placeholder="Supplier shipping ($)" className="rounded-lg border border-border-strong px-3 py-2 text-sm" />
             <input name="sellingPrice" type="number" step="0.01" placeholder="Selling price ($)" required className="rounded-lg border border-border-strong px-3 py-2 text-sm" />
             <input name="customerShipping" type="number" step="0.01" placeholder="Customer shipping ($)" className="rounded-lg border border-border-strong px-3 py-2 text-sm" />
             <input name="deliveryEstimateDays" placeholder="Delivery estimate (e.g. 7-14)" className="rounded-lg border border-border-strong px-3 py-2 text-sm" />

@@ -69,36 +69,64 @@ export default async function ProductPage({
           </div>
 
           <div>
-            <h1 className="text-3xl font-semibold tracking-tight text-navy">
+            {product.brand && (
+              <p className="text-sm font-medium text-blue">{product.brand}</p>
+            )}
+            <h1 className="mt-1 text-3xl font-semibold tracking-tight text-navy">
               {product.title}
             </h1>
             <p className="mt-3 text-2xl font-semibold text-navy">
               {product.currency} {(product.sellingPrice ?? 0).toFixed(2)}
             </p>
-            <p className="mt-1 text-sm text-slate">
-              + {product.currency} {(product.customerShipping ?? 0).toFixed(2)} shipping
-              &middot; estimated delivery in {product.deliveryEstimateDays} days
-            </p>
+            {product.fulfillmentType !== "affiliate" && (
+              <p className="mt-1 text-sm text-slate">
+                + {product.currency} {(product.customerShipping ?? 0).toFixed(2)} shipping
+                &middot; estimated delivery in {product.deliveryEstimateDays} days
+              </p>
+            )}
 
             <p className="mt-6 text-[15px] leading-relaxed text-slate">
               {product.description}
             </p>
 
             <div className="mt-8">
-              <AddToCart
-                productId={String(product.id)}
-                slug={product.slug ?? ""}
-                title={product.title}
-                image={images[0]}
-                unitPrice={product.sellingPrice ?? 0}
-                customerShipping={product.customerShipping ?? 0}
-                variants={product.variants.map((v) => ({
-                  id: String(v.id),
-                  name: v.name ?? v.title ?? "",
-                  priceDelta: v.priceDelta ?? 0,
-                }))}
-                outOfStock={product.stockStatus === "out_of_stock"}
-              />
+              {product.fulfillmentType === "affiliate" ? (
+                <div>
+                  <p className="mb-3 text-xs text-slate">
+                    This listing is fulfilled by our partner, not sold or shipped by SWD directly.
+                    You&apos;ll complete your purchase on their site.
+                  </p>
+                  {product.affiliateUrl ? (
+                    <Link
+                      href={product.affiliateUrl}
+                      target="_blank"
+                      rel="noopener noreferrer sponsored"
+                      className="inline-flex items-center justify-center rounded-lg bg-blue px-5 py-3 text-[15px] font-medium text-white hover:bg-blue-dark"
+                    >
+                      Buy via partner link
+                    </Link>
+                  ) : (
+                    <p className="text-sm text-slate">
+                      This affiliate link isn&apos;t configured yet — check back soon.
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <AddToCart
+                  productId={String(product.id)}
+                  slug={product.slug ?? ""}
+                  title={product.title}
+                  image={images[0]}
+                  unitPrice={product.sellingPrice ?? 0}
+                  customerShipping={product.customerShipping ?? 0}
+                  variants={product.variants.map((v) => ({
+                    id: String(v.id),
+                    name: v.name ?? v.title ?? "",
+                    priceDelta: v.priceDelta ?? 0,
+                  }))}
+                  outOfStock={product.stockStatus === "out_of_stock"}
+                />
+              )}
             </div>
           </div>
         </div>
@@ -118,6 +146,8 @@ export default async function ProductPage({
                 currency={p.currency ?? "UGX"}
                 stockStatus={p.stockStatus ?? ""}
                 isDemo={p.isDemo ?? false}
+                brand={p.brand}
+                fulfillmentType={p.fulfillmentType}
               />
             ))}
           </div>

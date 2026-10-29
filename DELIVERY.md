@@ -147,6 +147,9 @@ has real production data you don't want to risk with `push`.
 - Admin mutations (order status, send-to-supplier, tracking, product/
   supplier/category/coupon/admin creation) are Server Actions
   (`lib/admin-actions.ts`)
+- `GET /oraimo` — Oraimo brand landing page (see section N)
+- `GET /products?brand=<name>` — brand-filtered catalogue, combinable
+  with `?category=` and `?q=`
 
 ## D. Environment variables required
 
@@ -242,10 +245,71 @@ replacement — "Send to Supplier" still works for non-DSers suppliers.
 Phase 4 (marketing automation) is still not built — no spec yet for
 what it should send or to whom.
 
+## N. Oraimo brand collection
+
+Added as a thin layer on the existing product catalogue — no parallel
+storefront, no new checkout, no new admin. Oraimo products are
+ordinary rows in the same `products` table with `brand = "Oraimo"`.
+
+**What exists:**
+- `/oraimo` — brand landing page, linked from the main nav. Shows
+  category tiles (Earbuds & Headphones, Power Banks, Chargers &
+  Cables, Smartwatches, Speakers, Home Appliances — seeded as
+  categories, not products) and links into `/products?brand=Oraimo`.
+  An honest disclosure line is shown: SWD is not described as an
+  official Oraimo distributor unless that's confirmed, and affiliate
+  listings are flagged as such on their own product page.
+- `products.brand` (free text), `products.fulfillmentType`
+  (`"inventory"` default, or `"affiliate"`), `products.affiliateUrl` —
+  migration `0003_add_brand_fulfillment_affiliate.sql`, purely
+  additive (two nullable columns + one NOT NULL column with a safe
+  default that backfills every existing row to `"inventory"`; nothing
+  dropped or renamed).
+- `lib/product-fulfillment.ts` — the two rules shared by checkout and
+  the admin form (`isPurchasableInStore`, `validateProductFulfillment`),
+  unit-tested in `lib/__tests__/products-fulfillment.test.ts`.
+- `lib/db/seed-oraimo-categories.ts` (`npm run db:seed-oraimo-categories`)
+  — creates the six category rows above. **Seeds categories only, never
+  products** — no demo/placeholder Oraimo listings were created, since
+  inventing specs, pricing, stock, or warranty terms would misrepresent
+  the business. Add real Oraimo products through `/admin/products` with
+  real SKUs, costs, and prices once you have them.
+
+**What this deliberately does NOT assume or claim**, per the brief's
+own constraints — none of the following has been verified, so none of
+it is built or implied anywhere in the UI or copy:
+- An official Oraimo distributor/reseller/dealer relationship
+- An Oraimo affiliate program approval, API, or product feed
+- Any specific Oraimo product's specs, pricing, warranty, or stock
+
+**Mode A (admin-managed inventory)** is what's live today — add
+products by hand through the existing admin, same as any other
+product. **Mode B (affiliate)** is built and functional (the schema,
+checkout guard, and product-page UI all handle it) but inert until you
+have a real affiliate link to enter — nothing fake is seeded. **Mode
+C (automated supplier integration)** isn't built; nothing in this repo
+calls or scrapes any Oraimo-owned endpoint. If/when a supplier
+feed or API becomes available, the DSers integration (section M) is
+the template for how to wire one in without rebuilding the storefront.
+
 ## G. How to create a product
 
 Admin → Products → "Add product." Requires SKU, title, category,
-supplier, supplier SKU/cost/shipping, selling price, description.
+selling price, description, and a **Fulfilment** choice:
+
+- **SWD inventory** (default) — also requires a supplier. Sold and
+  shipped through SWD's own checkout, same as every product before
+  this. Supplier SKU/cost/shipping are optional (useful for margin
+  tracking) but no longer required at creation.
+- **Affiliate link** — requires an affiliate URL instead of a
+  supplier. Never appears with "Add to cart"; the product page shows
+  an outbound "Buy via partner link" button, and `/api/checkout`
+  rejects it server-side if a client ever tries to submit one anyway.
+
+`brand` is an optional free-text field (e.g. "Oraimo") — set it to
+make the product appear in that brand's filtered view at
+`/products?brand=<name>` and, for Oraimo specifically, on `/oraimo`.
+
 Created as `draft` — "Publish" in the list to make it live.
 
 ## H. Order flow: customer → payment → supplier → tracking
@@ -298,12 +362,15 @@ npm test        # unit + integration (Vitest)
 npm run test:e2e  # browser tests (Playwright) — needs the app buildable/startable
 ```
 
-33 Vitest tests across 7 files — unit tests (pricing, profit engine,
-coupon math, Flutterwave/DSers webhook signature verification,
-notification channel dispatch) plus 2 integration-test files that run
-against a real Postgres database (order-number atomicity, rate-limit
-correctness), both exercising real concurrency rather than asserting
-against a single call. `vitest.config.ts` / `vitest.setup.ts` load
+42 Vitest tests across 7 passing unit-test files (pricing, profit
+engine, Flutterwave/DSers webhook signature verification, notification
+channel dispatch, product fulfilment/affiliate rules, delivery-region
+matching) plus 3 files that need a real Postgres database to run at
+all (coupon math, order-number atomicity, rate-limit correctness —
+each imports `lib/db/client.ts`, which throws immediately if
+`DATABASE_URL` isn't set, rather than failing a specific assertion).
+The DB-dependent ones exercise real concurrency, not a single call.
+`vitest.config.ts` / `vitest.setup.ts` load
 `.env` automatically; the integration tests need `DATABASE_URL` set
 there, pointed at a non-production database — they insert real rows.
 
