@@ -5,6 +5,7 @@ import { ADMIN_COOKIE, isValidSessionToken } from "@/lib/admin-auth";
 
 const navItems = [
   { href: "/admin", label: "Dashboard" },
+  { href: "/admin/business-os", label: "Business OS" },
   { href: "/admin/orders", label: "Orders" },
   { href: "/admin/products", label: "Products" },
   { href: "/admin/suppliers", label: "Suppliers" },

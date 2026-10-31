@@ -475,3 +475,71 @@ credentials/data only you can supply — nothing further to code.
   clean `tsc --noEmit`; fixed with a `?? "UGX"` fallback.
 - Vitest was also trying to collect the new Playwright `e2e/**` specs
   and failing on them — scoped Vitest to exclude `e2e/**`.
+
+## O. SWD Business OS — Phase 1 (Foundation)
+
+The SWD Business OS Document Pack (charter, architecture, RBAC spec,
+roadmap) describes a much larger internal operations platform —
+Sales & POS, Inventory, Customers, Suppliers, Repair Management, Cash
+Management, Staff Management, Reports, SOPs, offline POS. Per its own
+roadmap, **Phase 1 (Foundation) — employee accounts, roles,
+permissions, audit logging, navigation, dashboard — is what's built
+and live now**; every other module is a real, honestly-labeled "Coming
+soon" tile on the dashboard, not a working screen, per the pack's own
+rule: "do not build decorative buttons that do nothing."
+
+**What exists:**
+- `admins` table extended (migration `0004_business_os_foundation.sql`,
+  purely additive): `employee_number`, `staff_role` (defaults every
+  existing admin to `OWNER` — unchanged effective access), `active`.
+- `audit_logs` table — append-only, inserted from `lib/audit.ts`'s
+  `recordAuditEvent()`. A logging failure is caught and logged, never
+  allowed to fail the action it's recording.
+- `lib/rbac.ts` — the four Business OS roles (OWNER/MANAGER/CASHIER/
+  TECHNICIAN) and a fixed permission table per
+  `05_Roles_Permissions_and_Access_Control.md`, checked via
+  `hasPermission(role, permission)`. Default-deny: an unknown/null role
+  is granted nothing. Unit-tested in `lib/__tests__/rbac.test.ts`.
+- Session tokens now carry `staffRole` (`lib/admin-auth.ts`); a
+  deactivated employee (`active = false`) is refused a new session at
+  login even with the correct password — checked server-side in
+  `checkAdminCredentials`, not just hidden in the UI. (An already-issued
+  session keeps working until its 8-hour expiry, same as any other
+  revocation in this token design — documented, not silently assumed.)
+- `/admin/business-os` — the eight-module dashboard from the reference
+  design. Each tile is permission-gated: unopened modules show "Coming
+  soon" (not built yet) or "No access" (built, but this role can't open
+  it) rather than a dead link.
+- `/admin/business-os/staff` — **Staff Management, fully working**:
+  list employees, create an account (name/email/temp password/employee
+  number/role), change a role, deactivate/reactivate. Every mutation is
+  gated server-side by `staff.manage` (`lib/admin-actions.ts`:
+  `createStaffAccount`, `setStaffRole`, `setStaffActive` — the page
+  itself also checks permission before rendering the form, but the
+  server action is the real gate), and every create/role-change/
+  activation-change is written to `audit_logs`. Two guard rails beyond
+  the spec's base requirements: an admin can't deactivate their own
+  account, and the last remaining `OWNER` can't be demoted (both would
+  otherwise be able to lock every admin out of the system).
+- Nav link added to the existing admin sidebar (`app/admin/layout.tsx`).
+
+**Verified in this build environment** against a real local Postgres
+(schema push, `npx next build` production build including the two new
+routes, a real login, and a full create → role-change → deactivate →
+audit-log round trip via a scripted browser session) — not just typed
+and assumed. The self-demotion and last-owner guards were also
+exercised directly and correctly rejected the unsafe action.
+
+**What this deliberately does NOT do yet** (next phases, per the
+pack's roadmap, each needing its own schema/UI/tests before any of it
+is "complete" per the pack's own acceptance bar): Inventory ledger,
+POS/Sales, Customers (CRM, separate from checkout's existing customer
+records), full Supplier/Purchasing workflow, Repair Management, Cash
+Management, Reports, SOP library, and offline PWA/IndexedDB support.
+None of these have screens, tables, or server actions built — the
+dashboard says so honestly rather than linking to something that isn't
+there. The pack's own open questions (section 12.3 — discount/refund
+limits, payment methods accepted, offline POS priority, receipt/tax
+requirements, data retention) are explicitly flagged in that document
+as decisions that should come from the business owner, not be guessed
+by an engineer — nothing here guesses at them.

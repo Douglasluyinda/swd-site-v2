@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ADMIN_COOKIE, checkAdminCredentials, createSessionToken } from "@/lib/admin-auth";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { recordAuditEvent } from "@/lib/audit";
 
 export async function POST(req: NextRequest) {
   const { email, password } = await req.json();
@@ -31,6 +32,11 @@ export async function POST(req: NextRequest) {
   }
 
   const token = await createSessionToken(admin);
+  await recordAuditEvent({
+    actorId: Number(admin.id),
+    actorEmail: admin.email,
+    action: "staff.login",
+  });
   const res = NextResponse.json({ ok: true });
   res.cookies.set(ADMIN_COOKIE, token, {
     httpOnly: true,

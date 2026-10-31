@@ -9,12 +9,37 @@ import {
 } from "drizzle-orm/pg-core";
 
 // 1. ADMINS
+// Doubles as the SWD Business OS employee/staff table (not duplicated —
+// per the Business OS build rule "reuse existing entities"). `role` is the
+// pre-existing storefront-admin label (kept for backward compatibility);
+// `staffRole` is the separate Business OS RBAC role (OWNER/MANAGER/
+// CASHIER/TECHNICIAN) checked by lib/rbac.ts for POS/inventory/repair/cash
+// module access. `active` lets a deactivated employee's session keep
+// failing auth even if their cookie hasn't expired yet.
 export const admins = pgTable("admins", {
   id: serial("id").primaryKey(),
   name: text("name"),
   email: text("email").notNull().unique(),
   passwordHash: text("password_hash").notNull(),
   role: text("role").default("admin"),
+  employeeNumber: text("employee_number"),
+  staffRole: text("staff_role").default("OWNER").notNull(),
+  active: boolean("active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// 1b. AUDIT LOGS — append-only record of sensitive Business OS actions
+// (role changes, staff activation/deactivation, and, as later modules are
+// built, discounts, refunds, stock adjustments, cash corrections). Never
+// updated or deleted from application code.
+export const auditLogs = pgTable("audit_logs", {
+  id: serial("id").primaryKey(),
+  actorId: integer("actor_id").references(() => admins.id),
+  actorEmail: text("actor_email"),
+  action: text("action").notNull(),
+  entityType: text("entity_type"),
+  entityId: text("entity_id"),
+  metadata: text("metadata"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

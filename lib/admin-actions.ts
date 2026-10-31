@@ -5,9 +5,11 @@ import { fulfillments, orders, trackingEvents, products, suppliers, categories, 
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { notifyDelivered, notifyShipped } from "@/lib/notifications";
-import { hashPassword } from "@/lib/admin-auth";
+import { getCurrentStaffSession, hashPassword } from "@/lib/admin-auth";
 import { uploadProductImage } from "@/lib/blob";
 import { validateProductFulfillment } from "@/lib/product-fulfillment";
+import { hasPermission, isValidStaffRole } from "@/lib/rbac";
+import { recordAuditEvent } from "@/lib/audit";
 
 const trackingStatusByOrderStatus: Record<string, string | undefined> = {
   SUPPLIER_ORDER_PENDING: "supplier_processing",
@@ -237,4 +239,109 @@ export async function deleteShippingRate(rateIdInput: string) {
   const rateId = Number(rateIdInput);
   await db.delete(shippingRates).where(eq(shippingRates.id, rateId));
   revalidatePath("/admin/shipping");
+}
+
+// --- SWD Business OS: staff management -------------------------------
+// Every mutation here is gated server-side by `staff.manage` (never just a
+// hidden button) and recorded to the append-only audit log, per the
+// Business OS spec's "role assignment changes are themselves audited" and
+// "server-side RBAC, default deny" rules.
+
+async function requireStaffManage() {
+  const session = await getCurrentStaffSession();
+  if (!session) throw new Error("Not signed in.");
+  if (!hasPermission(session.staffRole, "staff.manage")) {
+    throw new Error("You do not have permission to manage staff.");
+  }
+  return session;
+}
+
+export async function createStaffAccount(formData: FormData) {
+  const session = await requireStaffManage();
+
+  const name = ((formData.get("name") as string) || "").trim();
+  const email = ((formData.get("email") as string) || "").trim().toLowerCase();
+  const password = (formData.get("password") as string) || "";
+  const employeeNumber = ((formData.get("employeeNumber") as string) || "").trim() || null;
+  const staffRole = (formData.get("staffRole") as string) || "";
+
+  if (!name) throw new Error("Name is required.");
+  if (!email) throw new Error("Email is required.");
+  if (password.length < 8) throw new Error("Password must be at least 8 characters.");
+  if (!isValidStaffRole(staffRole)) throw new Error("Invalid role.");
+
+  const [existing] = await db.select().from(admins).where(eq(admins.email, email)).limit(1);
+  if (existing) throw new Error("An account with that email already exists.");
+
+  const passwordHash = await hashPassword(password);
+  const [created] = await db
+    .insert(admins)
+    .values({ name, email, passwordHash, employeeNumber, staffRole, active: true })
+    .returning({ id: admins.id });
+
+  await recordAuditEvent({
+    actorId: Number(session.adminId),
+    actorEmail: session.email,
+    action: "staff.create",
+    entityType: "admin",
+    entityId: created.id,
+    metadata: { email, staffRole, employeeNumber },
+  });
+
+  revalidatePath("/admin/business-os/staff");
+}
+
+export async function setStaffRole(staffIdInput: string, staffRole: string) {
+  const session = await requireStaffManage();
+  const staffId = Number(staffIdInput);
+  if (!isValidStaffRole(staffRole)) throw new Error("Invalid role.");
+
+  // An owner can't lock themselves (or the only owner) out by accident —
+  // require at least one other active OWNER before demoting this one.
+  const [target] = await db.select().from(admins).where(eq(admins.id, staffId)).limit(1);
+  if (!target) throw new Error("Employee not found.");
+  if (target.staffRole === "OWNER" && staffRole !== "OWNER") {
+    const owners = await db.select({ id: admins.id }).from(admins).where(eq(admins.staffRole, "OWNER"));
+    const otherActiveOwners = owners.filter((o) => o.id !== staffId);
+    if (otherActiveOwners.length === 0) {
+      throw new Error("At least one Owner account must remain.");
+    }
+  }
+
+  await db.update(admins).set({ staffRole }).where(eq(admins.id, staffId));
+
+  await recordAuditEvent({
+    actorId: Number(session.adminId),
+    actorEmail: session.email,
+    action: "staff.role_changed",
+    entityType: "admin",
+    entityId: staffId,
+    metadata: { from: target.staffRole, to: staffRole },
+  });
+
+  revalidatePath("/admin/business-os/staff");
+}
+
+export async function setStaffActive(staffIdInput: string, active: boolean) {
+  const session = await requireStaffManage();
+  const staffId = Number(staffIdInput);
+
+  if (!active && staffId === Number(session.adminId)) {
+    throw new Error("You cannot deactivate your own account.");
+  }
+
+  const [target] = await db.select().from(admins).where(eq(admins.id, staffId)).limit(1);
+  if (!target) throw new Error("Employee not found.");
+
+  await db.update(admins).set({ active }).where(eq(admins.id, staffId));
+
+  await recordAuditEvent({
+    actorId: Number(session.adminId),
+    actorEmail: session.email,
+    action: active ? "staff.reactivated" : "staff.deactivated",
+    entityType: "admin",
+    entityId: staffId,
+  });
+
+  revalidatePath("/admin/business-os/staff");
 }

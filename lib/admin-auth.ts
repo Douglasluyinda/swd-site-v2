@@ -21,6 +21,7 @@ const SESSION_TTL_SECONDS = 60 * 60 * 8; // 8 hours
 type SessionPayload = {
   adminId: string;
   email: string;
+  staffRole: string;
   exp: number; // unix seconds
 };
 
@@ -56,13 +57,18 @@ function timingSafeStringEqual(a: string, b: string): boolean {
   return mismatch === 0;
 }
 
-export async function createSessionToken(admin: { id: string; email: string }): Promise<string> {
+export async function createSessionToken(admin: {
+  id: string;
+  email: string;
+  staffRole?: string;
+}): Promise<string> {
   const secret = process.env.ADMIN_SESSION_SECRET;
   if (!secret) throw new Error("Missing ADMIN_SESSION_SECRET");
 
   const payload: SessionPayload = {
     adminId: admin.id,
     email: admin.email,
+    staffRole: admin.staffRole ?? "OWNER",
     exp: Math.floor(Date.now() / 1000) + SESSION_TTL_SECONDS,
   };
   const encodedPayload = base64url(new TextEncoder().encode(JSON.stringify(payload)));
@@ -105,12 +111,20 @@ export async function requireAdminSession(req: NextRequest): Promise<SessionPayl
   return verifySessionToken(token);
 }
 
+export async function getCurrentStaffSession(): Promise<SessionPayload | null> {
+  // Server Component / Server Action variant of requireAdminSession —
+  // reads the cookie via next/headers instead of a NextRequest.
+  const { cookies } = await import("next/headers");
+  const token = (await cookies()).get(ADMIN_COOKIE)?.value;
+  return verifySessionToken(token);
+}
+
 // Node-runtime only (bcrypt) — used from the login route and server
 // actions, never from proxy.ts (Edge).
 export async function checkAdminCredentials(
   email: string,
   password: string,
-): Promise<{ id: string; email: string; name: string } | null> {
+): Promise<{ id: string; email: string; name: string; staffRole: string } | null> {
   const [admin] = await db.select().from(admins).where(eq(admins.email, email)).limit(1);
   if (!admin) {
     // Still run a hash comparison against a dummy value so the response
@@ -119,7 +133,18 @@ export async function checkAdminCredentials(
     return null;
   }
   const ok = await bcrypt.compare(password, admin.passwordHash);
-  return ok ? { id: String(admin.id), email: admin.email, name: admin.name ?? admin.email } : null;
+  if (!ok) return null;
+  // A deactivated employee's password may still be correct — they must
+  // still be refused a session. Checked here (not just hidden in the UI)
+  // so a stale cookie from before deactivation also stops working once it
+  // expires and the person has to log in again.
+  if (!admin.active) return null;
+  return {
+    id: String(admin.id),
+    email: admin.email,
+    name: admin.name ?? admin.email,
+    staffRole: admin.staffRole,
+  };
 }
 
 export async function hashPassword(password: string): Promise<string> {
