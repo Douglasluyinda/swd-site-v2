@@ -674,3 +674,19 @@ by an engineer — nothing here guesses at them.
 - Migration `0007_business_os_customers.sql`: `customers.email` becomes nullable (relaxing), new columns, `customer_notes`, `sales.customer_id`. Deploy with the same push-after-backup approach as earlier phases.
 - Limitations: repairs will join the timeline once built; online-store customers only appear via search; no merge tool for duplicates; no delete (by design).
 - Tests: 126 passing locally (unit + integration on scratch Postgres); browser-verified on a production build.
+
+## U. Business OS — Repair Management (Phase 7)
+
+- `/admin/business-os/repairs`: ticket list (Open / All / by status) and a "Book in" form (customer name + phone, device, IMEI/serial, problem, condition on arrival). Tickets are numbered `SWD-RP-YYYY-NNNNNN`; the customer is found/created by phone.
+- Flow: Received → Diagnosing → Quoted → Approved → In repair → Quality check → Ready → Collected (Declined → Collected with nothing owed; Cancelled with a reason). The server rejects any other jump, so work cannot start before the customer has answered the quote.
+- Roles: Cashier/Manager/Owner book in and hand over; Manager/Owner assign technicians, quote, record the customer's answer, pass quality check, cancel; Technician sees and updates only tickets assigned to them (diagnosis, start repair, fit parts, send to quality check) and never sees quote/cost/margin.
+- Quote: manager sets the customer price and, optionally, an external technician + their charge. External name/cost are staff-only: they are not shown to cashiers or technicians and are not selected by the customer job slip (`…/[ticket]/slip`).
+- Approval: a written note of how the customer answered is mandatory; approver and time are stored.
+- Parts: only while In repair; each part is a `REPAIR_USE` stock movement (cost snapshot) so inventory stays correct.
+- Quality check: someone other than the assigned technician must pass it (Owner exempt so a one-person shop can finish jobs). A failed check returns to the bench with the reason.
+- Payment: paid in full, in cash, at hand-over, on the collector's own open cash session (locked like POS sales). It counts in the drawer's expected cash ("Repair payments"). A double click cannot take the money twice.
+- History (`repair_events`) and `repair_payments` are append-only (DB triggers). Customer profiles list their repair tickets.
+- Rejected rules show inline on these screens (new `ActionForm` component).
+- Migration `0008_business_os_repairs.sql` (tables + triggers; after `drizzle-kit push` run the trigger block by hand). Also adds permission `repairs.counter` and movement type `REPAIR_USE`.
+- Safe defaults awaiting owner decisions: no deposits; cash only; QC rule above. Not built: deposits/part-payments, refunds on repairs, warranty-on-repair tracking, customer SMS on status change, technician commission, parts reservation before approval.
+- Tests: 141 passing locally (rules, integration incl. concurrent collect, append-only triggers, 1-connection pool); browser-verified with cashier, manager and technician logins on a production build.

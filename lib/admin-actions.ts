@@ -15,6 +15,8 @@ import {
   approvePurchaseOrder, cancelPurchaseOrder, createPurchaseOrder, receiveGoods,
   recordSupplierInvoice, recordSupplierPayment,
 } from "@/lib/purchase-orders";
+import { addPart, answerQuote, assignTechnician, changeStatus as changeRepairStatus, collectDevice, createTicket, saveDiagnosis, submitQuote } from "@/lib/repair-service";
+import type { RepairStatus } from "@/lib/repairs";
 import { addCustomerNote, findOrCreateByPhone, updateCustomer } from "@/lib/customer-service";
 import { addCorrection, addMovement, approveSession, closeSession, openSession } from "@/lib/cash-sessions";
 import { applyStockMovement } from "@/lib/inventory";
@@ -678,4 +680,119 @@ export async function saveCustomerNote(formData: FormData) {
   });
   await recordAuditEvent({ actorId: Number(s.adminId), actorEmail: s.email, action: "customer.note_added", entityType: "customer", entityId: customerId, metadata: { kind: formData.get("kind") } });
   revalidatePath(`/admin/business-os/customers/${customerId}`);
+}
+
+// --- SWD Business OS: repairs --------------------------------------------
+// These return { ok, error } so the ticket screens can show a rejected rule
+// inline. Server-side checks are the real gate; the UI only hides buttons.
+
+type RepairResult = { ok: true; message?: string } | { ok: false; error: string };
+
+async function repairStaff() {
+  const s = await getCurrentStaffSession();
+  if (!s) throw new Error("Not signed in.");
+  const canManage = hasPermission(s.staffRole, "repairs.manage");
+  const canUpdate = hasPermission(s.staffRole, "repairs.update");
+  const canCounter = hasPermission(s.staffRole, "repairs.counter");
+  return { s, canManage, canUpdate, canCounter, actor: { id: Number(s.adminId), role: s.staffRole ?? "" } };
+}
+
+async function repairAction(
+  fn: (r: Awaited<ReturnType<typeof repairStaff>>) => Promise<{ audit: string; ticketId: number; message?: string; metadata?: Record<string, unknown> }>,
+): Promise<RepairResult> {
+  try {
+    const r = await repairStaff();
+    const out = await fn(r);
+    await recordAuditEvent({ actorId: r.actor.id, actorEmail: r.s.email, action: out.audit, entityType: "repair_ticket", entityId: out.ticketId, metadata: out.metadata });
+    revalidatePath("/admin/business-os/repairs");
+    revalidatePath(`/admin/business-os/repairs/${out.ticketId}`);
+    return { ok: true, message: out.message };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Something went wrong." };
+  }
+}
+
+const num = (f: FormData, k: string) => Number(f.get(k));
+const str = (f: FormData, k: string) => ((f.get(k) as string) || "");
+
+export async function createRepairTicket(f: FormData): Promise<RepairResult & { ticketNumber?: string }> {
+  let created: { id: number; ticketNumber: string } | null = null;
+  const r = await repairAction(async (x) => {
+    if (!x.canCounter) throw new Error("You do not have permission to book in repairs.");
+    created = await createTicket({
+      name: str(f, "name"), phone: str(f, "phone"), deviceType: str(f, "deviceType"), brand: str(f, "brand"),
+      model: str(f, "model"), imei: str(f, "imei"), issue: str(f, "issue"), intakeNotes: str(f, "intakeNotes"),
+      createdBy: x.actor.id,
+    });
+    return { audit: "repair.created", ticketId: created.id, message: `Booked in as ${created.ticketNumber}` };
+  });
+  return { ...r, ticketNumber: (created as { ticketNumber: string } | null)?.ticketNumber };
+}
+
+export async function assignRepairTechnician(f: FormData) {
+  return repairAction(async (x) => {
+    if (!x.canManage) throw new Error("Only a manager can assign technicians.");
+    const ticketId = num(f, "ticketId");
+    await assignTechnician({ ticketId, technicianId: num(f, "technicianId"), by: x.actor.id });
+    return { audit: "repair.assigned", ticketId, metadata: { technicianId: num(f, "technicianId") } };
+  });
+}
+
+export async function saveRepairDiagnosis(f: FormData) {
+  return repairAction(async (x) => {
+    if (!x.canManage && !x.canUpdate) throw new Error("You do not have permission to update repairs.");
+    const ticketId = num(f, "ticketId");
+    await saveDiagnosis({ ticketId, diagnosis: str(f, "diagnosis"), actor: x.actor, canManage: x.canManage });
+    return { audit: "repair.diagnosis", ticketId, message: "Saved" };
+  });
+}
+
+export async function moveRepairStatus(f: FormData) {
+  return repairAction(async (x) => {
+    if (!x.canManage && !x.canUpdate) throw new Error("You do not have permission to update repairs.");
+    const ticketId = num(f, "ticketId");
+    const to = str(f, "to") as RepairStatus;
+    await changeRepairStatus({ ticketId, to, note: str(f, "note"), actor: x.actor, canManage: x.canManage });
+    return { audit: "repair.status", ticketId, metadata: { to } };
+  });
+}
+
+export async function quoteRepair(f: FormData) {
+  return repairAction(async (x) => {
+    if (!x.canManage) throw new Error("Only a manager can give a quote.");
+    const ticketId = num(f, "ticketId");
+    await submitQuote({
+      ticketId, amount: num(f, "amount"), externalCost: num(f, "externalCost") || 0,
+      externalTechnician: str(f, "externalTechnician"), by: x.actor.id,
+    });
+    return { audit: "repair.quoted", ticketId, metadata: { amount: num(f, "amount"), externalCost: num(f, "externalCost") || 0 } };
+  });
+}
+
+export async function answerRepairQuote(f: FormData) {
+  return repairAction(async (x) => {
+    if (!x.canManage) throw new Error("Only a manager can record the customer's answer.");
+    const ticketId = num(f, "ticketId");
+    const approve = str(f, "answer") === "approve";
+    await answerQuote({ ticketId, approve, note: str(f, "note"), by: x.actor.id });
+    return { audit: approve ? "repair.approved" : "repair.declined", ticketId };
+  });
+}
+
+export async function fitRepairPart(f: FormData) {
+  return repairAction(async (x) => {
+    if (!x.canManage && !x.canUpdate) throw new Error("You do not have permission to update repairs.");
+    const ticketId = num(f, "ticketId");
+    await addPart({ ticketId, productId: num(f, "productId"), quantity: num(f, "quantity"), actor: x.actor, canManage: x.canManage });
+    return { audit: "repair.part_fitted", ticketId, metadata: { productId: num(f, "productId"), quantity: num(f, "quantity") } };
+  });
+}
+
+export async function collectRepair(f: FormData) {
+  return repairAction(async (x) => {
+    if (!x.canCounter) throw new Error("You do not have permission to hand over repairs.");
+    const ticketId = num(f, "ticketId");
+    const { paid } = await collectDevice({ ticketId, actor: x.actor });
+    return { audit: "repair.collected", ticketId, message: paid > 0 ? `Collected — ${paid.toLocaleString()} UGX cash taken` : "Returned", metadata: { paid } };
+  });
 }

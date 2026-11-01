@@ -18,11 +18,12 @@ export function expectedCash(input: {
   expenses: number;
   withdrawals: number;
   deposits: number;
+  repairPayments?: number;
   corrections?: number; // signed
 }): number {
   return (
     input.openingFloat + input.cashSales - input.cashRefunds - input.expenses -
-    input.withdrawals + input.deposits + (input.corrections ?? 0)
+    input.withdrawals + input.deposits + (input.repairPayments ?? 0) + (input.corrections ?? 0)
   );
 }
 

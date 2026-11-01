@@ -2,7 +2,7 @@ import Link from "next/link";
 import { desc, eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db/client";
-import { admins, customerNotes, customers, sales } from "@/lib/db/schema";
+import { admins, customerNotes, customers, repairTickets, sales } from "@/lib/db/schema";
 import { getCurrentStaffSession } from "@/lib/admin-auth";
 import { hasPermission } from "@/lib/rbac";
 import { saveCustomer, saveCustomerNote } from "@/lib/admin-actions";
@@ -26,10 +26,13 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
     .select({ id: customerNotes.id, kind: customerNotes.kind, text: customerNotes.text, at: customerNotes.createdAt, by: admins.name })
     .from(customerNotes).leftJoin(admins, eq(admins.id, customerNotes.employeeId))
     .where(eq(customerNotes.customerId, id)).orderBy(desc(customerNotes.id));
+  const canSeeRepairs = hasPermission(me?.staffRole, "repairs.counter");
+  const repairs = canSeeRepairs ? await db.select().from(repairTickets).where(eq(repairTickets.customerId, id)).orderBy(desc(repairTickets.id)).limit(50) : [];
   const spent = history.reduce((a, s) => a + s.total, 0);
 
   const timeline = [
     ...history.map((s) => ({ at: s.createdAt, kind: "SALE", text: `${s.receiptNumber} — ${s.total.toLocaleString()} UGX`, href: `/admin/business-os/pos/receipt/${s.receiptNumber}` as string | null })),
+    ...repairs.map((r) => ({ at: r.createdAt, kind: "REPAIR", text: `${r.ticketNumber} — ${[r.brand, r.model].filter(Boolean).join(" ") || r.deviceType} (${r.status.replace("_", " ")})`, href: `/admin/business-os/repairs/${r.ticketNumber}` as string | null })),
     ...notes.map((n) => ({ at: n.at, kind: n.kind, text: `${n.text}${n.by ? ` — ${n.by}` : ""}`, href: null })),
   ].sort((a, b) => b.at.getTime() - a.at.getTime());
 
@@ -86,7 +89,7 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
           ))}
           {timeline.length === 0 && <li className="py-6 text-center text-slate">Nothing yet.</li>}
         </ul>
-        <p className="mt-3 text-xs text-slate">Shows shop sales linked by phone. Repairs will appear here once repair management exists.</p>
+        <p className="mt-3 text-xs text-slate">Shows shop sales and repair tickets linked by phone.</p>
       </div>
     </div>
   );

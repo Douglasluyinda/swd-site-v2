@@ -540,3 +540,70 @@ export const customerNotes = pgTable("customer_notes", {
   employeeId: integer("employee_id").references(() => admins.id).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
+
+// 22. BUSINESS OS REPAIRS. One ticket per device job. Status history is
+// insert-only (repair_events). external_cost / external_technician are
+// staff-only margin data and never appear on customer-facing slips.
+// Repair payments are cash taken at collection and count in the drawer.
+export const repairCounters = pgTable("repair_counters", {
+  year: integer("year").primaryKey(),
+  seq: integer("seq").default(0).notNull(),
+});
+
+export const repairTickets = pgTable("repair_tickets", {
+  id: serial("id").primaryKey(),
+  ticketNumber: text("ticket_number").notNull().unique(),
+  customerId: integer("customer_id").references(() => customers.id).notNull(),
+  deviceType: text("device_type").notNull(),
+  brand: text("brand"),
+  model: text("model"),
+  imei: text("imei"),
+  issue: text("issue").notNull(),
+  intakeNotes: text("intake_notes"), // condition, accessories left, passcode policy etc.
+  status: text("status").default("RECEIVED").notNull(),
+  technicianId: integer("technician_id").references(() => admins.id),
+  diagnosis: text("diagnosis"),
+  quoteAmount: numeric("quote_amount", { precision: 12, scale: 2, mode: "number" }),
+  quotedAt: timestamp("quoted_at"),
+  approvedBy: integer("approved_by").references(() => admins.id),
+  approvedAt: timestamp("approved_at"),
+  approvalNote: text("approval_note"),
+  externalTechnician: text("external_technician"),
+  externalCost: numeric("external_cost", { precision: 12, scale: 2, mode: "number" }).default(0).notNull(),
+  qcBy: integer("qc_by").references(() => admins.id),
+  qcAt: timestamp("qc_at"),
+  collectedAt: timestamp("collected_at"),
+  createdBy: integer("created_by").references(() => admins.id).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const repairEvents = pgTable("repair_events", {
+  id: serial("id").primaryKey(),
+  ticketId: integer("ticket_id").references(() => repairTickets.id).notNull(),
+  fromStatus: text("from_status"),
+  toStatus: text("to_status").notNull(),
+  note: text("note"),
+  employeeId: integer("employee_id").references(() => admins.id).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const repairParts = pgTable("repair_parts", {
+  id: serial("id").primaryKey(),
+  ticketId: integer("ticket_id").references(() => repairTickets.id).notNull(),
+  productId: integer("product_id").references(() => products.id).notNull(),
+  quantity: integer("quantity").notNull(),
+  unitCost: numeric("unit_cost", { precision: 12, scale: 2, mode: "number" }),
+  employeeId: integer("employee_id").references(() => admins.id).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const repairPayments = pgTable("repair_payments", {
+  id: serial("id").primaryKey(),
+  ticketId: integer("ticket_id").references(() => repairTickets.id).notNull().unique(), // one payment per ticket (no deposits yet)
+  amount: numeric("amount", { precision: 12, scale: 2, mode: "number" }).notNull(),
+  method: text("method").default("CASH").notNull(),
+  cashSessionId: integer("cash_session_id").references(() => cashSessions.id).notNull(),
+  employeeId: integer("employee_id").references(() => admins.id).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});

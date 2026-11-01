@@ -40,6 +40,12 @@ describe("hasPermission", () => {
     expect(hasPermission("TECHNICIAN", "reports.view")).toBe(false);
   });
 
+  it("repairs.counter: counter staff yes, technician no; costs stay with managers", () => {
+    expect(hasPermission("CASHIER", "repairs.counter")).toBe(true);
+    expect(hasPermission("TECHNICIAN", "repairs.counter")).toBe(false);
+    expect(hasPermission("CASHIER", "repairs.manage")).toBe(false);
+  });
+
   it("denies everything for a null, undefined, or invalid role (default deny)", () => {
     expect(hasPermission(null, "pos.sell")).toBe(false);
     expect(hasPermission(undefined, "pos.sell")).toBe(false);

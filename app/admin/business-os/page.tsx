@@ -11,7 +11,7 @@ const modules: {
   title: string;
   description: string;
   href: string | null;
-  permission: Permission | null;
+  permission: Permission | Permission[] | null;
 }[] = [
   {
     title: "Sales & POS",
@@ -40,8 +40,8 @@ const modules: {
   {
     title: "Repair Management",
     description: "Repair tickets, technicians and status.",
-    href: null,
-    permission: "repairs.manage",
+    href: "/admin/business-os/repairs",
+    permission: ["repairs.counter", "repairs.update"],
   },
   {
     title: "Cash Management",
@@ -79,7 +79,7 @@ export default async function BusinessOsPage() {
 
       <div className="mt-6 grid gap-4 sm:grid-cols-2">
         {modules.map((m) => {
-          const allowed = m.permission ? hasPermission(role, m.permission) : true;
+          const allowed = m.permission ? [m.permission].flat().some((p) => hasPermission(role, p)) : true;
           const live = m.href !== null;
 
           if (live && allowed) {

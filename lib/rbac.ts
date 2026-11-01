@@ -21,6 +21,7 @@ export type Permission =
   | "suppliers.manage"
   | "purchasing.approve"
   | "repairs.manage" // full repair ticket lifecycle
+  | "repairs.counter" // intake + hand-over at the counter, no costs/margins
   | "repairs.update" // technician: diagnosis, parts, status on assigned tickets
   | "cash.session" // open/close own cash session
   | "cash.reconcile" // review/approve cash sessions, variance
@@ -39,6 +40,7 @@ const ROLE_PERMISSIONS: Record<StaffRole, Permission[]> = {
     "purchasing.approve",
     "repairs.manage",
     "repairs.update",
+    "repairs.counter",
     "cash.session",
     "cash.reconcile",
     "reports.view",
@@ -53,11 +55,12 @@ const ROLE_PERMISSIONS: Record<StaffRole, Permission[]> = {
     "suppliers.manage",
     "purchasing.approve",
     "repairs.manage",
+    "repairs.counter",
     "cash.session",
     "cash.reconcile",
     "reports.view",
   ],
-  CASHIER: ["pos.sell", "inventory.view", "customers.manage", "cash.session"],
+  CASHIER: ["pos.sell", "inventory.view", "customers.manage", "cash.session", "repairs.counter"],
   TECHNICIAN: ["repairs.update", "inventory.view"],
 };
 

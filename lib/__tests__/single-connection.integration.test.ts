@@ -57,4 +57,31 @@ describe("sale + return on a single-connection pool", () => {
     expect(prod.stock).toBe(4);
   });
   afterAll(() => vi.unstubAllEnvs());
+  it("a repair from intake to collection completes without deadlocking", { timeout: 20000 }, async () => {
+    vi.stubEnv("DB_POOL_MAX", "1");
+    vi.resetModules();
+    const { db } = await import("@/lib/db/client");
+    const { admins, products } = await import("@/lib/db/schema");
+    const { applyStockMovement } = await import("@/lib/inventory");
+    const { openSession } = await import("@/lib/cash-sessions");
+    const r = await import("@/lib/repair-service");
+
+    const tag = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+    const [o] = await db.insert(admins).values({ email: `pool-rp-${tag}@test.local`, passwordHash: "x", staffRole: "OWNER" }).returning();
+    const [p] = await db.insert(products).values({ sku: `PRP-${tag}`, title: "Part", status: "active", costPrice: 1000 }).returning();
+    await applyStockMovement({ productId: p.id, type: "PURCHASE_RECEIPT", quantity: 2, employeeId: o.id });
+    await openSession(o.id, 0);
+    const actor = { id: o.id, role: "OWNER" };
+    const { id } = await r.createTicket({ name: "Pool", phone: `07${String(Math.floor(Math.random() * 1e8)).padStart(8, "0")}`, deviceType: "Phone", issue: "x", createdBy: o.id });
+    await r.assignTechnician({ ticketId: id, technicianId: o.id, by: o.id });
+    await r.changeStatus({ ticketId: id, to: "DIAGNOSING", actor, canManage: true });
+    await r.saveDiagnosis({ ticketId: id, diagnosis: "d", actor, canManage: true });
+    await r.submitQuote({ ticketId: id, amount: 5000, externalCost: 0, by: o.id });
+    await r.answerQuote({ ticketId: id, approve: true, note: "ok", by: o.id });
+    await r.changeStatus({ ticketId: id, to: "IN_REPAIR", actor, canManage: true });
+    await r.addPart({ ticketId: id, productId: p.id, quantity: 1, actor, canManage: true });
+    await r.changeStatus({ ticketId: id, to: "QUALITY_CHECK", actor, canManage: true });
+    await r.changeStatus({ ticketId: id, to: "READY", actor, canManage: true });
+    expect((await r.collectDevice({ ticketId: id, actor })).paid).toBe(5000);
+  });
 });

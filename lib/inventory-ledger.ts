@@ -11,6 +11,7 @@ export const MOVEMENT_TYPES = [
   "ADJUSTMENT_OUT",
   "DAMAGE",
   "LOSS",
+  "REPAIR_USE",
   "TRANSFER_IN",
   "TRANSFER_OUT",
 ] as const;
@@ -25,6 +26,7 @@ const SIGN: Record<MovementType, 1 | -1> = {
   ADJUSTMENT_OUT: -1,
   DAMAGE: -1,
   LOSS: -1,
+  REPAIR_USE: -1,
   TRANSFER_IN: 1,
   TRANSFER_OUT: -1,
 };

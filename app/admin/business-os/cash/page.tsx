@@ -84,6 +84,7 @@ export default async function CashPage() {
             <div><dt className="text-slate">Expenses</dt><dd className="text-navy">-{fmt(totals.expenses)}</dd></div>
             <div><dt className="text-slate">Withdrawals</dt><dd className="text-navy">-{fmt(totals.withdrawals)}</dd></div>
             <div><dt className="text-slate">Deposits</dt><dd className="text-navy">{fmt(totals.deposits)}</dd></div>
+            <div><dt className="text-slate">Repair payments</dt><dd className="text-navy">{fmt(totals.repairPayments)}</dd></div>
           </dl>
           {reviewer ? (
             <p className="text-sm font-semibold text-navy">Expected in drawer: {fmt(totals.expected)} UGX</p>

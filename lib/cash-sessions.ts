@@ -1,6 +1,6 @@
 import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
-import { cashMovements, cashSessions, salePayments, saleReturns, sales } from "@/lib/db/schema";
+import { cashMovements, cashSessions, repairPayments as repairPayments_, salePayments, saleReturns, sales } from "@/lib/db/schema";
 import { canApprove, expectedCash, needsApproval, validateClose, validateMovement, variance } from "@/lib/cash";
 
 // Every function takes an executor so callers already inside a transaction
@@ -37,6 +37,10 @@ export async function sessionTotals(executor: Executor, sessionId: number, openi
     .select({ v: sql<number>`coalesce(sum(${saleReturns.refundTotal}),0)::float` })
     .from(saleReturns)
     .where(eq(saleReturns.cashSessionId, sessionId));
+  const [{ v: repairPayments }] = await executor
+    .select({ v: sql<number>`coalesce(sum(${repairPayments_.amount}),0)::float` })
+    .from(repairPayments_)
+    .where(eq(repairPayments_.cashSessionId, sessionId));
   const moves = await executor
     .select({ type: cashMovements.type, v: sql<number>`coalesce(sum(${cashMovements.amount}),0)::float` })
     .from(cashMovements)
@@ -50,6 +54,7 @@ export async function sessionTotals(executor: Executor, sessionId: number, openi
     expenses: sum("EXPENSE"),
     withdrawals: sum("WITHDRAWAL"),
     deposits: sum("DEPOSIT"),
+    repairPayments,
     corrections: sum("CORRECTION"),
   };
   return { ...parts, expected: expectedCash(parts) };
