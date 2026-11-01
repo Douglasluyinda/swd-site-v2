@@ -601,3 +601,38 @@ by an engineer — nothing here guesses at them.
   to the ledger.
 - Tests: 86 passing (incl. concurrent sales never oversell, idempotent
   double-submit, rollback, discount limits, refund pro-rating).
+
+## R. SWD Business OS — Phase 4 (Cash management)
+
+- `/admin/business-os/cash`: open a session with a float; record expenses,
+  withdrawals, deposits (reason required); close with a counted amount;
+  session history. Cashiers see only their own sessions and are **not shown
+  the expected total until they close** (blind count); managers/owners see
+  everything.
+- Rules (`lib/cash.ts`, unit-tested): expected = float + cash sales − cash
+  refunds − expenses − withdrawals + deposits (+ signed corrections);
+  variance = counted − expected; any variance needs a written explanation;
+  |variance| > 5,000 UGX leaves the session `PENDING_APPROVAL` until a
+  *different* user with `cash.reconcile` approves it. Closed sessions are
+  never edited — a manager/owner posts a signed `CORRECTION` movement with a
+  reason. All of it is audited.
+- **Sales and refunds now require an open session** (`sales.cash_session_id`,
+  `sale_returns.cash_session_id`): no session, no cash sale; a refund comes
+  out of the processing employee's drawer. One open session per employee is
+  enforced by a partial unique index. `cash_movements` is append-only (DB
+  trigger).
+- Migration `0005_business_os_cash.sql` also creates the POS tables from
+  Phase 3 (they had been applied with `push` only). Same deploy note as
+  Phase 2: apply with `drizzle-kit push` after a Neon backup/branch, then run
+  the two trigger statements at the end of 0005 (push does not create
+  triggers; same for the Phase 2 ledger trigger in 0004).
+- **Defaults I chose, pending your decision:** 5,000 UGX variance threshold
+  (`CASH_VARIANCE_THRESHOLD`); self-approval blocked; cash only, so there is
+  no mobile-money/bank/card reconciliation yet.
+- Known UX gap (same as the rest of the admin): a rejected action such as
+  closing with a variance but no note shows Next's generic "This page
+  couldn't load" error instead of an inline message. The POS till already
+  shows inline errors; the admin forms should be moved to the same pattern.
+- Verified in a browser: sale blocked with no session; open → sell → close
+  short by 10,000 → pending → cashier can't approve → manager approves →
+  CLOSED, with audit entries. 100 tests pass.

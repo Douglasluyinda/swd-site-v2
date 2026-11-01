@@ -5,6 +5,7 @@ import { db } from "@/lib/db/client";
 import { admins, inventoryMovements, products, sales, saleItems } from "@/lib/db/schema";
 import { applyStockMovement } from "@/lib/inventory";
 import { createSale, refundSale } from "@/lib/sales";
+import { openSession } from "@/lib/cash-sessions";
 
 async function setup(stock: number, price = 20000) {
   const tag = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
@@ -16,6 +17,7 @@ async function setup(stock: number, price = 20000) {
     .insert(products)
     .values({ sku: `POS-${tag}`, title: "POS test item", status: "active", sellingPrice: price, costPrice: 12000 })
     .returning();
+  await openSession(emp.id, 0);
   if (stock) await applyStockMovement({ productId: p.id, type: "PURCHASE_RECEIPT", quantity: stock, employeeId: emp.id });
   return { emp, p, tag };
 }

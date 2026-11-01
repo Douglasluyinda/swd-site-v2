@@ -11,6 +11,7 @@ import { validateProductFulfillment } from "@/lib/product-fulfillment";
 import { hasPermission, isValidStaffRole } from "@/lib/rbac";
 import { recordAuditEvent } from "@/lib/audit";
 import { createSale, refundSale } from "@/lib/sales";
+import { addCorrection, addMovement, approveSession, closeSession, openSession } from "@/lib/cash-sessions";
 import { applyStockMovement } from "@/lib/inventory";
 import { MANUAL_MOVEMENT_TYPES, isMovementType } from "@/lib/inventory-ledger";
 
@@ -462,4 +463,85 @@ export async function processReturn(formData: FormData) {
     metadata: { refundTotal, reason },
   });
   revalidatePath(`/admin/business-os/pos/receipt/${receiptNumber}`);
+}
+
+// --- SWD Business OS: cash management ----------------------------------
+
+async function requireCashStaff() {
+  const session = await getCurrentStaffSession();
+  if (!session) throw new Error("Not signed in.");
+  if (!hasPermission(session.staffRole, "cash.session")) {
+    throw new Error("You do not have permission to handle cash sessions.");
+  }
+  return session;
+}
+
+export async function openCashSession(formData: FormData) {
+  const s = await requireCashStaff();
+  const float = Number(formData.get("openingFloat"));
+  const created = await openSession(Number(s.adminId), float);
+  await recordAuditEvent({
+    actorId: Number(s.adminId), actorEmail: s.email, action: "cash.session_opened",
+    entityType: "cash_session", entityId: created.id, metadata: { openingFloat: float },
+  });
+  revalidatePath("/admin/business-os/cash");
+}
+
+export async function recordCashMovement(formData: FormData) {
+  const s = await requireCashStaff();
+  const type = (formData.get("type") as string) || "";
+  const amount = Number(formData.get("amount"));
+  const reason = (formData.get("reason") as string) || "";
+  const sessionId = Number(formData.get("sessionId"));
+  await addMovement({ sessionId, employeeId: Number(s.adminId), type, amount, reason });
+  await recordAuditEvent({
+    actorId: Number(s.adminId), actorEmail: s.email, action: `cash.${type.toLowerCase()}`,
+    entityType: "cash_session", entityId: sessionId, metadata: { amount, reason },
+  });
+  revalidatePath("/admin/business-os/cash");
+}
+
+export async function closeCashSession(formData: FormData) {
+  const s = await requireCashStaff();
+  const sessionId = Number(formData.get("sessionId"));
+  const r = await closeSession({
+    sessionId,
+    employeeId: Number(s.adminId),
+    counted: Number(formData.get("counted")),
+    note: (formData.get("note") as string) || null,
+  });
+  await recordAuditEvent({
+    actorId: Number(s.adminId), actorEmail: s.email, action: "cash.session_closed",
+    entityType: "cash_session", entityId: sessionId, metadata: r,
+  });
+  revalidatePath("/admin/business-os/cash");
+}
+
+export async function approveCashSession(formData: FormData) {
+  const s = await requireCashStaff();
+  const sessionId = Number(formData.get("sessionId"));
+  await approveSession({
+    sessionId,
+    approverId: Number(s.adminId),
+    approverCanReconcile: hasPermission(s.staffRole, "cash.reconcile"),
+  });
+  await recordAuditEvent({
+    actorId: Number(s.adminId), actorEmail: s.email, action: "cash.variance_approved",
+    entityType: "cash_session", entityId: sessionId,
+  });
+  revalidatePath("/admin/business-os/cash");
+}
+
+export async function correctCashSession(formData: FormData) {
+  const s = await requireCashStaff();
+  if (!hasPermission(s.staffRole, "cash.reconcile")) throw new Error("Only a manager or owner can post cash corrections.");
+  const sessionId = Number(formData.get("sessionId"));
+  const amount = Number(formData.get("amount"));
+  const reason = (formData.get("reason") as string) || "";
+  await addCorrection({ sessionId, employeeId: Number(s.adminId), amount, reason });
+  await recordAuditEvent({
+    actorId: Number(s.adminId), actorEmail: s.email, action: "cash.correction",
+    entityType: "cash_session", entityId: sessionId, metadata: { amount, reason },
+  });
+  revalidatePath("/admin/business-os/cash");
 }

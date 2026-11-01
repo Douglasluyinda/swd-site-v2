@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
   pgTable,
   serial,
@@ -7,6 +8,7 @@ import {
   timestamp,
   boolean,
   unique,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 
 // 1. ADMINS
@@ -364,6 +366,7 @@ export const sales = pgTable("sales", {
   receiptNumber: text("receipt_number").notNull().unique(),
   idempotencyKey: text("idempotency_key").notNull().unique(),
   employeeId: integer("employee_id").references(() => admins.id).notNull(),
+  cashSessionId: integer("cash_session_id"),
   customerName: text("customer_name"),
   customerPhone: text("customer_phone"),
   subtotal: numeric("subtotal", { precision: 12, scale: 2, mode: "number" }).notNull(),
@@ -402,6 +405,7 @@ export const saleReturns = pgTable("sale_returns", {
   id: serial("id").primaryKey(),
   saleId: integer("sale_id").references(() => sales.id).notNull(),
   employeeId: integer("employee_id").references(() => admins.id).notNull(),
+  cashSessionId: integer("cash_session_id"),
   reason: text("reason").notNull(),
   refundTotal: numeric("refund_total", { precision: 12, scale: 2, mode: "number" }).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -413,4 +417,37 @@ export const saleReturnItems = pgTable("sale_return_items", {
   saleItemId: integer("sale_item_id").references(() => saleItems.id).notNull(),
   quantity: integer("quantity").notNull(),
   refundAmount: numeric("refund_amount", { precision: 12, scale: 2, mode: "number" }).notNull(),
+});
+
+// 19. BUSINESS OS CASH — one open session per employee (partial unique
+// index). Closed sessions are never edited: post-close fixes are CORRECTION
+// movements (reconcile permission, audited). cash_movements is append-only
+// (trigger in migration 0005).
+export const cashSessions = pgTable(
+  "cash_sessions",
+  {
+    id: serial("id").primaryKey(),
+    employeeId: integer("employee_id").references(() => admins.id).notNull(),
+    status: text("status").default("OPEN").notNull(), // OPEN | PENDING_APPROVAL | CLOSED
+    openingFloat: numeric("opening_float", { precision: 12, scale: 2, mode: "number" }).notNull(),
+    openedAt: timestamp("opened_at").defaultNow().notNull(),
+    closedAt: timestamp("closed_at"),
+    countedCash: numeric("counted_cash", { precision: 12, scale: 2, mode: "number" }),
+    expectedCash: numeric("expected_cash", { precision: 12, scale: 2, mode: "number" }),
+    variance: numeric("variance", { precision: 12, scale: 2, mode: "number" }),
+    varianceNote: text("variance_note"),
+    approvedBy: integer("approved_by").references(() => admins.id),
+    approvedAt: timestamp("approved_at"),
+  },
+  (t) => [uniqueIndex("cash_sessions_one_open_per_employee").on(t.employeeId).where(sql`${t.status} = 'OPEN'`)],
+);
+
+export const cashMovements = pgTable("cash_movements", {
+  id: serial("id").primaryKey(),
+  sessionId: integer("session_id").references(() => cashSessions.id).notNull(),
+  type: text("type").notNull(), // EXPENSE | DEPOSIT | WITHDRAWAL | CORRECTION
+  amount: numeric("amount", { precision: 12, scale: 2, mode: "number" }).notNull(), // signed only for CORRECTION
+  reason: text("reason").notNull(),
+  employeeId: integer("employee_id").references(() => admins.id).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
 });

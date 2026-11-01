@@ -12,11 +12,13 @@ describe("sale + return on a single-connection pool", () => {
     const { admins, products, saleItems, sales } = await import("@/lib/db/schema");
     const { applyStockMovement } = await import("@/lib/inventory");
     const { createSale, refundSale } = await import("@/lib/sales");
+    const { openSession } = await import("@/lib/cash-sessions");
     const { eq } = await import("drizzle-orm");
 
     const tag = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
     const [emp] = await db.insert(admins).values({ email: `one-${tag}@test.local`, passwordHash: "x", staffRole: "OWNER" }).returning();
     const [p] = await db.insert(products).values({ sku: `ONE-${tag}`, title: "Pool test", status: "active", sellingPrice: 10000 }).returning();
+    await openSession(emp.id, 0);
     await applyStockMovement({ productId: p.id, type: "PURCHASE_RECEIPT", quantity: 3, employeeId: emp.id });
 
     const { receiptNumber } = await createSale({

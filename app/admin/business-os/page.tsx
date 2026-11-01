@@ -46,7 +46,7 @@ const modules: {
   {
     title: "Cash Management",
     description: "Cash, mobile money and reconciliation.",
-    href: null,
+    href: "/admin/business-os/cash",
     permission: "cash.session",
   },
   {

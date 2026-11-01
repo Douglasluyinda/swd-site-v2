@@ -10,6 +10,7 @@ import {
   sales,
 } from "@/lib/db/schema";
 import { applyStockMovement } from "@/lib/inventory";
+import { getOpenSession } from "@/lib/cash-sessions";
 import {
   computeSale,
   receiptNumber,
@@ -67,6 +68,10 @@ export async function createSale(input: CreateSaleInput): Promise<{ receiptNumbe
 
   try {
     return await db.transaction(async (tx) => {
+      // Cash handling must be attributable: no open session, no cash sale.
+      const session = await getOpenSession(tx as unknown as typeof db, input.employeeId);
+      if (!session) throw new Error("Open a cash session before making a sale.");
+
       const year = new Date().getFullYear();
       const [counter] = await tx
         .insert(receiptCounters)
@@ -81,6 +86,7 @@ export async function createSale(input: CreateSaleInput): Promise<{ receiptNumbe
           receiptNumber: number,
           idempotencyKey: input.idempotencyKey,
           employeeId: input.employeeId,
+          cashSessionId: session.id,
           customerName: input.customerName?.trim() || null,
           customerPhone: input.customerPhone?.trim() || null,
           subtotal: totals.subtotal,
@@ -143,6 +149,10 @@ export async function refundSale(input: {
   if (!input.reason.trim()) throw new Error("A reason is required for a return.");
 
   return db.transaction(async (tx) => {
+    // Cash goes out of the processing employee's drawer, so they need a session.
+    const session = await getOpenSession(tx as unknown as typeof db, input.employeeId);
+    if (!session) throw new Error("Open a cash session before processing a refund.");
+
     const [sale] = await tx.select().from(sales).where(eq(sales.receiptNumber, input.receiptNumber)).for("update");
     if (!sale) throw new Error("Sale not found.");
 
@@ -170,7 +180,7 @@ export async function refundSale(input: {
     const refundTotal = toReturn.reduce((a, r) => a + r.amount, 0);
     const [ret] = await tx
       .insert(saleReturns)
-      .values({ saleId: sale.id, employeeId: input.employeeId, reason: input.reason.trim(), refundTotal })
+      .values({ saleId: sale.id, employeeId: input.employeeId, cashSessionId: session.id, reason: input.reason.trim(), refundTotal })
       .returning({ id: saleReturns.id });
 
     for (const r of toReturn) {
