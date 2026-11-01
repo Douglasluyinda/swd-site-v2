@@ -162,8 +162,16 @@ export const customers = pgTable("customers", {
   fullName: text("full_name"),
   firstName: text("first_name"),
   lastName: text("last_name"),
-  email: text("email").notNull().unique(),
+  // Optional: walk-in shop customers are registered by phone alone. The
+  // unique constraint still stops duplicate emails among those who have one.
+  email: text("email").unique(),
   phone: text("phone"),
+  // Business OS CRM. `phone_normalized` (E.164) is set only for customers the
+  // shop registers, and is unique, so one phone = one shop customer.
+  phoneNormalized: text("phone_normalized").unique(),
+  location: text("location"),
+  preferredChannel: text("preferred_channel"),
+  marketingOptIn: boolean("marketing_opt_in").default(false).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -367,6 +375,7 @@ export const sales = pgTable("sales", {
   idempotencyKey: text("idempotency_key").notNull().unique(),
   employeeId: integer("employee_id").references(() => admins.id).notNull(),
   cashSessionId: integer("cash_session_id"),
+  customerId: integer("customer_id").references(() => customers.id),
   customerName: text("customer_name"),
   customerPhone: text("customer_phone"),
   subtotal: numeric("subtotal", { precision: 12, scale: 2, mode: "number" }).notNull(),
@@ -518,5 +527,16 @@ export const supplierPayments = pgTable("supplier_payments", {
   method: text("method").notNull(),
   reference: text("reference"),
   paidBy: integer("paid_by").references(() => admins.id).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// 21. CUSTOMER NOTES — append-only log of notes, complaints and warranty
+// records per customer (kind), each attributed to the employee who wrote it.
+export const customerNotes = pgTable("customer_notes", {
+  id: serial("id").primaryKey(),
+  customerId: integer("customer_id").references(() => customers.id).notNull(),
+  kind: text("kind").notNull(),
+  text: text("text").notNull(),
+  employeeId: integer("employee_id").references(() => admins.id).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });

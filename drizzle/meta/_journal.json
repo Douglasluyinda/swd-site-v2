@@ -50,6 +50,13 @@
       "when": 1793520858865,
       "tag": "0006_business_os_purchasing",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1793521169030,
+      "tag": "0007_business_os_customers",
+      "breakpoints": true
     }
   ]
 }

@@ -28,7 +28,7 @@ const modules: {
   {
     title: "Customers",
     description: "Profiles, contacts and purchase history.",
-    href: null,
+    href: "/admin/business-os/customers",
     permission: "customers.manage",
   },
   {

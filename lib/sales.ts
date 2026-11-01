@@ -11,6 +11,8 @@ import {
 } from "@/lib/db/schema";
 import { applyStockMovement } from "@/lib/inventory";
 import { getOpenSession } from "@/lib/cash-sessions";
+import { findOrCreateByPhone } from "@/lib/customer-service";
+import { normalizePhone } from "@/lib/customers";
 import {
   computeSale,
   receiptNumber,
@@ -72,6 +74,18 @@ export async function createSale(input: CreateSaleInput): Promise<{ receiptNumbe
       const session = await getOpenSession(tx as unknown as typeof db, input.employeeId);
       if (!session) throw new Error("Open a cash session before making a sale.");
 
+      // Walk-ins stay anonymous. If a phone is given, link (or register) the
+      // customer so purchase history builds up — a bad phone fails the sale
+      // before anything is written.
+      let customerId: number | null = null;
+      if (input.customerPhone?.trim()) {
+        if (!normalizePhone(input.customerPhone)) throw new Error("Enter a valid phone number, or leave it blank for a walk-in.");
+        const c = await findOrCreateByPhone(tx as unknown as typeof db, {
+          name: input.customerName?.trim() || "Walk-in customer", phone: input.customerPhone,
+        });
+        customerId = c.id;
+      }
+
       const year = new Date().getFullYear();
       const [counter] = await tx
         .insert(receiptCounters)
@@ -87,6 +101,7 @@ export async function createSale(input: CreateSaleInput): Promise<{ receiptNumbe
           idempotencyKey: input.idempotencyKey,
           employeeId: input.employeeId,
           cashSessionId: session.id,
+          customerId,
           customerName: input.customerName?.trim() || null,
           customerPhone: input.customerPhone?.trim() || null,
           subtotal: totals.subtotal,

@@ -664,3 +664,13 @@ by an engineer — nothing here guesses at them.
   submission (cancel and re-create), invoices matched line-by-line to receipts,
   customer module. 116 tests pass, including receiving and payment on a
   1-connection pool.
+
+## T. Business OS — Customers (Phase 6)
+
+- `/admin/business-os/customers`: list/search (name, phone, email) and register. Walk-ins need only name + phone; email optional. Phones are normalised to E.164 (+256…) and unique, so registering an existing number reuses that customer.
+- `/admin/business-os/customers/[id]`: edit details, preferred channel, marketing consent; purchase history (sales linked by phone); notes, complaints and warranty records timeline.
+- POS: entering a customer phone at checkout registers/links the customer inside the sale transaction; a bad phone fails before any write; blank stays anonymous.
+- Permission `customers.manage` (OWNER, MANAGER, CASHIER). Registration, edits (incl. consent) and notes are audit-logged.
+- Migration `0007_business_os_customers.sql`: `customers.email` becomes nullable (relaxing), new columns, `customer_notes`, `sales.customer_id`. Deploy with the same push-after-backup approach as earlier phases.
+- Limitations: repairs will join the timeline once built; online-store customers only appear via search; no merge tool for duplicates; no delete (by design).
+- Tests: 126 passing locally (unit + integration on scratch Postgres); browser-verified on a production build.

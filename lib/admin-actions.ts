@@ -15,6 +15,7 @@ import {
   approvePurchaseOrder, cancelPurchaseOrder, createPurchaseOrder, receiveGoods,
   recordSupplierInvoice, recordSupplierPayment,
 } from "@/lib/purchase-orders";
+import { addCustomerNote, findOrCreateByPhone, updateCustomer } from "@/lib/customer-service";
 import { addCorrection, addMovement, approveSession, closeSession, openSession } from "@/lib/cash-sessions";
 import { applyStockMovement } from "@/lib/inventory";
 import { MANUAL_MOVEMENT_TYPES, isMovementType } from "@/lib/inventory-ledger";
@@ -636,4 +637,45 @@ export async function addSupplierPayment(formData: FormData) {
   });
   await recordAuditEvent({ actorId: Number(s.adminId), actorEmail: s.email, action: "purchasing.supplier_paid", entityType: "supplier", entityId: supplierId, metadata: { amount } });
   revalidatePath("/admin/business-os/purchasing");
+}
+
+// --- SWD Business OS: customers -----------------------------------------
+
+export async function registerCustomer(formData: FormData) {
+  const s = await requireStaff("customers.manage", "register customers");
+  const c = await findOrCreateByPhone(db, {
+    name: (formData.get("name") as string) || "",
+    phone: (formData.get("phone") as string) || "",
+    email: (formData.get("email") as string) || null,
+    location: (formData.get("location") as string) || null,
+  });
+  await recordAuditEvent({ actorId: Number(s.adminId), actorEmail: s.email, action: "customer.registered", entityType: "customer", entityId: c.id });
+  revalidatePath("/admin/business-os/customers");
+}
+
+export async function saveCustomer(formData: FormData) {
+  const s = await requireStaff("customers.manage", "edit customers");
+  const id = Number(formData.get("customerId"));
+  await updateCustomer(id, {
+    name: (formData.get("name") as string) || "",
+    phone: (formData.get("phone") as string) || "",
+    email: (formData.get("email") as string) || null,
+    location: (formData.get("location") as string) || null,
+    preferredChannel: (formData.get("preferredChannel") as string) || null,
+    marketingOptIn: formData.get("marketingOptIn") === "on",
+  });
+  // Contact/consent changes are sensitive record changes (spec: audit them).
+  await recordAuditEvent({ actorId: Number(s.adminId), actorEmail: s.email, action: "customer.updated", entityType: "customer", entityId: id, metadata: { marketingOptIn: formData.get("marketingOptIn") === "on" } });
+  revalidatePath(`/admin/business-os/customers/${id}`);
+}
+
+export async function saveCustomerNote(formData: FormData) {
+  const s = await requireStaff("customers.manage", "add customer notes");
+  const customerId = Number(formData.get("customerId"));
+  await addCustomerNote({
+    customerId, kind: (formData.get("kind") as string) || "", text: (formData.get("text") as string) || "",
+    employeeId: Number(s.adminId),
+  });
+  await recordAuditEvent({ actorId: Number(s.adminId), actorEmail: s.email, action: "customer.note_added", entityType: "customer", entityId: customerId, metadata: { kind: formData.get("kind") } });
+  revalidatePath(`/admin/business-os/customers/${customerId}`);
 }
