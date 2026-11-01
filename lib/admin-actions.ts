@@ -11,6 +11,10 @@ import { validateProductFulfillment } from "@/lib/product-fulfillment";
 import { hasPermission, isValidStaffRole } from "@/lib/rbac";
 import { recordAuditEvent } from "@/lib/audit";
 import { createSale, refundSale } from "@/lib/sales";
+import {
+  approvePurchaseOrder, cancelPurchaseOrder, createPurchaseOrder, receiveGoods,
+  recordSupplierInvoice, recordSupplierPayment,
+} from "@/lib/purchase-orders";
 import { addCorrection, addMovement, approveSession, closeSession, openSession } from "@/lib/cash-sessions";
 import { applyStockMovement } from "@/lib/inventory";
 import { MANUAL_MOVEMENT_TYPES, isMovementType } from "@/lib/inventory-ledger";
@@ -544,4 +548,92 @@ export async function correctCashSession(formData: FormData) {
     entityType: "cash_session", entityId: sessionId, metadata: { amount, reason },
   });
   revalidatePath("/admin/business-os/cash");
+}
+
+// --- SWD Business OS: purchasing ----------------------------------------
+
+async function requireStaff(permission: Parameters<typeof hasPermission>[1], what: string) {
+  const session = await getCurrentStaffSession();
+  if (!session) throw new Error("Not signed in.");
+  if (!hasPermission(session.staffRole, permission)) throw new Error(`You do not have permission to ${what}.`);
+  return session;
+}
+
+export async function submitPurchaseOrder(payload: {
+  supplierId: number; note?: string; lines: { productId: number; quantity: number; unitCost: number }[];
+}): Promise<{ ok: true; poNumber: string } | { ok: false; error: string }> {
+  try {
+    const s = await requireStaff("suppliers.manage", "create purchase orders");
+    const r = await createPurchaseOrder({ ...payload, createdBy: Number(s.adminId) });
+    await recordAuditEvent({
+      actorId: Number(s.adminId), actorEmail: s.email, action: "purchasing.po_created",
+      entityType: "purchase_order", entityId: r.poNumber, metadata: { lines: payload.lines.length },
+    });
+    revalidatePath("/admin/business-os/purchasing");
+    return { ok: true, poNumber: r.poNumber };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Could not create the order." };
+  }
+}
+
+export async function approvePo(formData: FormData) {
+  const s = await requireStaff("purchasing.approve", "approve purchase orders");
+  const poNumber = (formData.get("poNumber") as string) || "";
+  await approvePurchaseOrder({ poNumber, approverId: Number(s.adminId), approverRole: s.staffRole, hasPermission: true });
+  await recordAuditEvent({ actorId: Number(s.adminId), actorEmail: s.email, action: "purchasing.po_approved", entityType: "purchase_order", entityId: poNumber });
+  revalidatePath(`/admin/business-os/purchasing/${poNumber}`);
+}
+
+export async function cancelPo(formData: FormData) {
+  const s = await requireStaff("suppliers.manage", "cancel purchase orders");
+  const poNumber = (formData.get("poNumber") as string) || "";
+  await cancelPurchaseOrder(poNumber);
+  await recordAuditEvent({ actorId: Number(s.adminId), actorEmail: s.email, action: "purchasing.po_cancelled", entityType: "purchase_order", entityId: poNumber });
+  revalidatePath(`/admin/business-os/purchasing/${poNumber}`);
+}
+
+export async function receivePoGoods(formData: FormData) {
+  const s = await requireStaff("inventory.manage", "receive goods");
+  const poNumber = (formData.get("poNumber") as string) || "";
+  const lines: { poItemId: number; accepted: number; rejected: number; rejectionNote?: string }[] = [];
+  for (const [k, v] of formData.entries()) {
+    if (!k.startsWith("acc_")) continue;
+    const id = Number(k.slice(4));
+    lines.push({
+      poItemId: id, accepted: Number(v) || 0,
+      rejected: Number(formData.get(`rej_${id}`)) || 0,
+      rejectionNote: ((formData.get(`note_${id}`) as string) || "").trim(),
+    });
+  }
+  const r = await receiveGoods({ poNumber, receivedBy: Number(s.adminId), note: (formData.get("note") as string) || null, lines });
+  await recordAuditEvent({ actorId: Number(s.adminId), actorEmail: s.email, action: "purchasing.goods_received", entityType: "purchase_order", entityId: poNumber, metadata: r });
+  revalidatePath(`/admin/business-os/purchasing/${poNumber}`);
+  revalidatePath("/admin/business-os/inventory");
+}
+
+export async function addSupplierInvoice(formData: FormData) {
+  const s = await requireStaff("suppliers.manage", "record supplier invoices");
+  const due = (formData.get("dueDate") as string) || "";
+  await recordSupplierInvoice({
+    supplierId: Number(formData.get("supplierId")),
+    poNumber: ((formData.get("poNumber") as string) || "") || null,
+    invoiceNumber: (formData.get("invoiceNumber") as string) || "",
+    amount: Number(formData.get("amount")),
+    dueDate: due ? new Date(due) : null,
+    createdBy: Number(s.adminId),
+  });
+  await recordAuditEvent({ actorId: Number(s.adminId), actorEmail: s.email, action: "purchasing.invoice_recorded", entityType: "supplier", entityId: String(formData.get("supplierId")), metadata: { invoice: formData.get("invoiceNumber"), amount: Number(formData.get("amount")) } });
+  revalidatePath("/admin/business-os/purchasing");
+}
+
+export async function addSupplierPayment(formData: FormData) {
+  const s = await requireStaff("purchasing.approve", "pay suppliers");
+  const supplierId = Number(formData.get("supplierId"));
+  const amount = Number(formData.get("amount"));
+  await recordSupplierPayment({
+    supplierId, amount, method: (formData.get("method") as string) || "",
+    reference: (formData.get("reference") as string) || null, paidBy: Number(s.adminId),
+  });
+  await recordAuditEvent({ actorId: Number(s.adminId), actorEmail: s.email, action: "purchasing.supplier_paid", entityType: "supplier", entityId: supplierId, metadata: { amount } });
+  revalidatePath("/admin/business-os/purchasing");
 }

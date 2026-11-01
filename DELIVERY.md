@@ -636,3 +636,31 @@ by an engineer — nothing here guesses at them.
 - Verified in a browser: sale blocked with no session; open → sell → close
   short by 10,000 → pending → cashier can't approve → manager approves →
   CLOSED, with audit entries. 100 tests pass.
+
+## S. SWD Business OS — Phase 5 (Purchasing, goods receiving, supplier balances)
+
+- `/admin/business-os/purchasing` (the dashboard's Suppliers card now opens
+  here; the dropshipping directory is still at `/admin/suppliers`) and
+  `/admin/business-os/purchasing/<SWD-PO-YYYY-NNNNNN>`.
+- Flow: create PO (multi-line, supplier, unit costs) → pending approval →
+  approve → receive (partial deliveries, rejected units with a reason) →
+  record supplier invoice → record payment. **A PO never changes stock; only a
+  goods receipt does**, posting `PURCHASE_RECEIPT` ledger movements at the PO
+  unit cost. Receiving locks the PO row, so two simultaneous receipts can't
+  exceed the ordered quantity (tested); payments lock the supplier row so two
+  can't overpay the balance (tested). Cancel is allowed only before anything is
+  received.
+- Permissions: create/cancel/invoice = `suppliers.manage`; approve and pay =
+  `purchasing.approve` (manager/owner); receive = `inventory.manage`. All
+  audited.
+- **Defaults I chose, pending your decision:** a manager can't approve their own
+  PO (an owner can); POs above 1,000,000 UGX need the owner
+  (`PO_OWNER_APPROVAL_THRESHOLD` in `lib/purchasing.ts`). Supplier payment is
+  *recorded* here (money paid by SWD outside the app); it never goes through
+  the customer gateway and the app moves no money.
+- Migration `0006_business_os_purchasing.sql` (additive). Apply the same way
+  as 0004/0005.
+- Not yet: supplier performance scores/price comparison, editing a PO after
+  submission (cancel and re-create), invoices matched line-by-line to receipts,
+  customer module. 116 tests pass, including receiving and payment on a
+  1-connection pool.

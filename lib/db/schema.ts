@@ -451,3 +451,72 @@ export const cashMovements = pgTable("cash_movements", {
   employeeId: integer("employee_id").references(() => admins.id).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
+
+// 20. BUSINESS OS PURCHASING. A PO never changes stock; only a goods receipt
+// does (via the inventory ledger). Receipt and payment rows are insert-only
+// in application code. Supplier balance = invoices − payments.
+export const poCounters = pgTable("po_counters", {
+  year: integer("year").primaryKey(),
+  seq: integer("seq").default(0).notNull(),
+});
+
+export const purchaseOrders = pgTable("purchase_orders", {
+  id: serial("id").primaryKey(),
+  poNumber: text("po_number").notNull().unique(),
+  supplierId: integer("supplier_id").references(() => suppliers.id).notNull(),
+  status: text("status").default("DRAFT").notNull(),
+  total: numeric("total", { precision: 12, scale: 2, mode: "number" }).notNull(),
+  currency: text("currency").default("UGX").notNull(),
+  note: text("note"),
+  createdBy: integer("created_by").references(() => admins.id).notNull(),
+  approvedBy: integer("approved_by").references(() => admins.id),
+  approvedAt: timestamp("approved_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const purchaseOrderItems = pgTable("purchase_order_items", {
+  id: serial("id").primaryKey(),
+  poId: integer("po_id").references(() => purchaseOrders.id).notNull(),
+  productId: integer("product_id").references(() => products.id).notNull(),
+  quantity: integer("quantity").notNull(),
+  unitCost: numeric("unit_cost", { precision: 12, scale: 2, mode: "number" }).notNull(),
+});
+
+export const goodsReceipts = pgTable("goods_receipts", {
+  id: serial("id").primaryKey(),
+  poId: integer("po_id").references(() => purchaseOrders.id).notNull(),
+  receivedBy: integer("received_by").references(() => admins.id).notNull(),
+  note: text("note"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const goodsReceiptItems = pgTable("goods_receipt_items", {
+  id: serial("id").primaryKey(),
+  receiptId: integer("receipt_id").references(() => goodsReceipts.id).notNull(),
+  poItemId: integer("po_item_id").references(() => purchaseOrderItems.id).notNull(),
+  quantityAccepted: integer("quantity_accepted").notNull(),
+  quantityRejected: integer("quantity_rejected").default(0).notNull(),
+  rejectionNote: text("rejection_note"),
+});
+
+export const supplierInvoices = pgTable("supplier_invoices", {
+  id: serial("id").primaryKey(),
+  supplierId: integer("supplier_id").references(() => suppliers.id).notNull(),
+  poId: integer("po_id").references(() => purchaseOrders.id),
+  invoiceNumber: text("invoice_number").notNull(),
+  amount: numeric("amount", { precision: 12, scale: 2, mode: "number" }).notNull(),
+  dueDate: timestamp("due_date"),
+  createdBy: integer("created_by").references(() => admins.id).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (t) => [unique("supplier_invoices_supplier_number_uq").on(t.supplierId, t.invoiceNumber)]);
+
+export const supplierPayments = pgTable("supplier_payments", {
+  id: serial("id").primaryKey(),
+  supplierId: integer("supplier_id").references(() => suppliers.id).notNull(),
+  invoiceId: integer("invoice_id").references(() => supplierInvoices.id),
+  amount: numeric("amount", { precision: 12, scale: 2, mode: "number" }).notNull(),
+  method: text("method").notNull(),
+  reference: text("reference"),
+  paidBy: integer("paid_by").references(() => admins.id).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});

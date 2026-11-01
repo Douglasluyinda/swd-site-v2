@@ -34,7 +34,7 @@ const modules: {
   {
     title: "Suppliers",
     description: "Supplier directory and purchasing.",
-    href: "/admin/suppliers",
+    href: "/admin/business-os/purchasing",
     permission: "suppliers.manage",
   },
   {
