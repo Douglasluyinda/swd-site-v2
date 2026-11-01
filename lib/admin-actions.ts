@@ -10,6 +10,7 @@ import { uploadProductImage } from "@/lib/blob";
 import { validateProductFulfillment } from "@/lib/product-fulfillment";
 import { hasPermission, isValidStaffRole } from "@/lib/rbac";
 import { recordAuditEvent } from "@/lib/audit";
+import { createSale, refundSale } from "@/lib/sales";
 import { applyStockMovement } from "@/lib/inventory";
 import { MANUAL_MOVEMENT_TYPES, isMovementType } from "@/lib/inventory-ledger";
 
@@ -394,4 +395,71 @@ export async function recordStockMovement(formData: FormData) {
   });
 
   revalidatePath("/admin/business-os/inventory");
+}
+
+// --- SWD Business OS: POS -----------------------------------------------
+
+export async function completeSale(payload: {
+  idempotencyKey: string;
+  lines: { productId: number; quantity: number }[];
+  discountPercent: number;
+  tendered: number;
+  customerName?: string;
+  customerPhone?: string;
+}): Promise<{ ok: true; receiptNumber: string } | { ok: false; error: string }> {
+  const session = await getCurrentStaffSession();
+  if (!session) return { ok: false, error: "Not signed in." };
+  if (!hasPermission(session.staffRole, "pos.sell")) {
+    return { ok: false, error: "You do not have permission to make sales." };
+  }
+  try {
+    const r = await createSale({
+      ...payload,
+      employeeId: Number(session.adminId),
+      role: session.staffRole,
+    });
+    if (!r.duplicate) {
+      await recordAuditEvent({
+        actorId: Number(session.adminId),
+        actorEmail: session.email,
+        action: "pos.sale",
+        entityType: "sale",
+        entityId: r.receiptNumber,
+        metadata: { discountPercent: payload.discountPercent, lines: payload.lines.length },
+      });
+    }
+    revalidatePath("/admin/business-os/inventory");
+    return { ok: true, receiptNumber: r.receiptNumber };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Sale failed." };
+  }
+}
+
+export async function processReturn(formData: FormData) {
+  const session = await getCurrentStaffSession();
+  if (!session) throw new Error("Not signed in.");
+  if (!hasPermission(session.staffRole, "pos.refund")) {
+    throw new Error("Only a manager or owner can process returns and refunds.");
+  }
+  const receiptNumber = (formData.get("receiptNumber") as string) || "";
+  const reason = (formData.get("reason") as string) || "";
+  const quantities: Record<number, number> = {};
+  for (const [k, v] of formData.entries()) {
+    if (k.startsWith("qty_")) quantities[Number(k.slice(4))] = Number(v) || 0;
+  }
+  const { refundTotal } = await refundSale({
+    receiptNumber,
+    employeeId: Number(session.adminId),
+    reason,
+    quantities,
+  });
+  await recordAuditEvent({
+    actorId: Number(session.adminId),
+    actorEmail: session.email,
+    action: "pos.refund",
+    entityType: "sale",
+    entityId: receiptNumber,
+    metadata: { refundTotal, reason },
+  });
+  revalidatePath(`/admin/business-os/pos/receipt/${receiptNumber}`);
 }

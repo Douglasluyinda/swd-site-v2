@@ -16,7 +16,7 @@ const modules: {
   {
     title: "Sales & POS",
     description: "Sales, receipts, discounts and returns.",
-    href: null,
+    href: "/admin/business-os/pos",
     permission: "pos.sell",
   },
   {

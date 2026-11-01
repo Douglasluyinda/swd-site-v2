@@ -20,7 +20,10 @@ if (!process.env.DATABASE_URL) {
 
 const client = postgres(process.env.DATABASE_URL, {
   // A conservative default for serverless; raise for a long-lived server.
-  max: process.env.NODE_ENV === "production" ? 1 : 10,
+  // DB_POOL_MAX overrides it (the tests use it to reproduce production's
+  // single-connection pool, where touching the global `db` from inside an
+  // open transaction deadlocks).
+  max: Number(process.env.DB_POOL_MAX) || (process.env.NODE_ENV === "production" ? 1 : 10),
 });
 
 export const db = drizzle(client, { schema });

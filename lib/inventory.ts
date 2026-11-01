@@ -10,9 +10,9 @@ import { signedQuantity, validateMovement, type MovementType } from "@/lib/inven
 
 export const DEFAULT_LOCATION_NAME = "Main shop";
 
-export async function getDefaultLocationId(): Promise<number> {
-  await db.insert(inventoryLocations).values({ name: DEFAULT_LOCATION_NAME }).onConflictDoNothing();
-  const [loc] = await db
+export async function getDefaultLocationId(executor: Pick<typeof db, "insert" | "select"> = db): Promise<number> {
+  await executor.insert(inventoryLocations).values({ name: DEFAULT_LOCATION_NAME }).onConflictDoNothing();
+  const [loc] = await executor
     .select()
     .from(inventoryLocations)
     .where(eq(inventoryLocations.name, DEFAULT_LOCATION_NAME))
@@ -24,7 +24,10 @@ export async function getDefaultLocationId(): Promise<number> {
 // products.stock mirror all happen in a single transaction, with the
 // balance row locked so concurrent movements can't both pass the
 // "not below zero" check.
-export async function applyStockMovement(input: {
+type Executor = Pick<typeof db, "insert" | "select" | "update" | "transaction">;
+
+export async function applyStockMovement(
+  input: {
   productId: number;
   locationId?: number;
   type: MovementType;
@@ -33,10 +36,16 @@ export async function applyStockMovement(input: {
   reference?: string | null;
   note?: string | null;
   employeeId: number | null;
-}): Promise<{ balanceAfter: number }> {
-  const locationId = input.locationId ?? (await getDefaultLocationId());
+  },
+  // Pass an open transaction to make the stock change part of a larger
+  // atomic operation (e.g. a POS sale); omitted, it runs in its own.
+  executor: Executor = db,
+): Promise<{ balanceAfter: number }> {
+  return executor.transaction(async (tx) => {
+    // Everything below must use `tx`, never the global `db`: with a
+    // single-connection pool (production) a second connection never comes.
+    const locationId = input.locationId ?? (await getDefaultLocationId(tx));
 
-  return db.transaction(async (tx) => {
     await tx
       .insert(inventoryBalances)
       .values({ productId: input.productId, locationId, quantity: 0 })

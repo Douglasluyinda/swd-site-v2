@@ -349,3 +349,68 @@ export const inventoryMovements = pgTable("inventory_movements", {
   employeeId: integer("employee_id").references(() => admins.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
+
+// 18. BUSINESS OS POS — physical-shop sales. Separate from online `orders`.
+// Money is whole UGX. `idempotency_key` makes a retried submit return the
+// original sale instead of creating a duplicate. Items snapshot title/price/
+// cost so later product edits never rewrite history.
+export const receiptCounters = pgTable("receipt_counters", {
+  year: integer("year").primaryKey(),
+  seq: integer("seq").default(0).notNull(),
+});
+
+export const sales = pgTable("sales", {
+  id: serial("id").primaryKey(),
+  receiptNumber: text("receipt_number").notNull().unique(),
+  idempotencyKey: text("idempotency_key").notNull().unique(),
+  employeeId: integer("employee_id").references(() => admins.id).notNull(),
+  customerName: text("customer_name"),
+  customerPhone: text("customer_phone"),
+  subtotal: numeric("subtotal", { precision: 12, scale: 2, mode: "number" }).notNull(),
+  discountPercent: numeric("discount_percent", { precision: 5, scale: 2, mode: "number" }).default(0).notNull(),
+  discountAmount: numeric("discount_amount", { precision: 12, scale: 2, mode: "number" }).default(0).notNull(),
+  total: numeric("total", { precision: 12, scale: 2, mode: "number" }).notNull(),
+  currency: text("currency").default("UGX").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const saleItems = pgTable("sale_items", {
+  id: serial("id").primaryKey(),
+  saleId: integer("sale_id").references(() => sales.id).notNull(),
+  productId: integer("product_id").references(() => products.id).notNull(),
+  sku: text("sku").notNull(),
+  title: text("title").notNull(),
+  quantity: integer("quantity").notNull(),
+  unitPrice: numeric("unit_price", { precision: 12, scale: 2, mode: "number" }).notNull(),
+  unitCost: numeric("unit_cost", { precision: 12, scale: 2, mode: "number" }),
+});
+
+// Payments. v1 accepts CASH only (RECEIVED). Mobile money / card rows must
+// start UNVERIFIED and be verified separately — never inferred from a
+// reference number typed by staff.
+export const salePayments = pgTable("sale_payments", {
+  id: serial("id").primaryKey(),
+  saleId: integer("sale_id").references(() => sales.id).notNull(),
+  method: text("method").notNull(),
+  amount: numeric("amount", { precision: 12, scale: 2, mode: "number" }).notNull(),
+  tendered: numeric("tendered", { precision: 12, scale: 2, mode: "number" }),
+  status: text("status").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const saleReturns = pgTable("sale_returns", {
+  id: serial("id").primaryKey(),
+  saleId: integer("sale_id").references(() => sales.id).notNull(),
+  employeeId: integer("employee_id").references(() => admins.id).notNull(),
+  reason: text("reason").notNull(),
+  refundTotal: numeric("refund_total", { precision: 12, scale: 2, mode: "number" }).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const saleReturnItems = pgTable("sale_return_items", {
+  id: serial("id").primaryKey(),
+  returnId: integer("return_id").references(() => saleReturns.id).notNull(),
+  saleItemId: integer("sale_item_id").references(() => saleItems.id).notNull(),
+  quantity: integer("quantity").notNull(),
+  refundAmount: numeric("refund_amount", { precision: 12, scale: 2, mode: "number" }).notNull(),
+});

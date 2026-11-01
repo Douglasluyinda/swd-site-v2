@@ -569,3 +569,35 @@ by an engineer — nothing here guesses at them.
   stock valuation by FIFO/average cost, and POS/purchase flows that will
   post SALE / PURCHASE_RECEIPT movements automatically. Online checkout does
   not yet post SALE ledger entries — flagged for the POS/orders integration.
+
+## Q. SWD Business OS — Phase 3 (Sales & POS, cash)
+
+- `/admin/business-os/pos`: till (search by name/SKU, cart, discount, cash
+  tendered/change), recent sales; printable receipt at
+  `/admin/business-os/pos/receipt/<SWD-R-YYYY-NNNNNN>`; return/refund form on
+  the receipt for manager/owner only (`pos.refund`).
+- `createSale` (`lib/sales.ts`) is one transaction: re-prices from the DB
+  (the browser sends only product ids + quantities), writes sale, items
+  (title/price/cost snapshot) and cash payment, posts `SALE` ledger
+  movements (rolling the whole sale back if stock would go negative), mints
+  a gap-free receipt number. A per-cart idempotency key makes a retry or
+  double-click return the original receipt. Returns post `CUSTOMER_RETURN`
+  movements and refund pro-rated for the sale discount, capped at units sold.
+- **Safe defaults chosen by me, pending your decision** (pack §12.3):
+  cash only; discount limits Cashier 0% / Manager 10% / Owner any
+  (`DISCOUNT_LIMIT_PERCENT` in `lib/pos.ts`); refunds manager/owner only with
+  no amount threshold. Mobile money/card are deliberately not enabled: they
+  need a separate verification step, never a staff-typed reference.
+- Bug found and fixed while testing in a real browser: production's DB pool
+  is a single connection (`max: 1`), and `applyStockMovement` looked up the
+  default location through the global connection while inside a transaction,
+  which hung forever. The Vitest pool is 10, so ordinary tests could not see
+  it. Fixed, and `single-connection.integration.test.ts` reruns a sale +
+  return on a 1-connection pool (`DB_POOL_MAX`); it times out without the fix.
+  **Rule going forward: inside a transaction, use `tx`, never `db`.**
+- Not yet: cash sessions/till reconciliation (next phase), voiding a sale,
+  customer records linked to sales (name/phone are free text for now),
+  mobile money/card, offline mode, tax. Online store orders still don't post
+  to the ledger.
+- Tests: 86 passing (incl. concurrent sales never oversell, idempotent
+  double-submit, rollback, discount limits, refund pro-rating).
