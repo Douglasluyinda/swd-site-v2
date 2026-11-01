@@ -58,7 +58,7 @@ const modules: {
   {
     title: "Reports",
     description: "Daily, weekly and monthly performance.",
-    href: null,
+    href: "/admin/business-os/reports",
     permission: "reports.view",
   },
 ];

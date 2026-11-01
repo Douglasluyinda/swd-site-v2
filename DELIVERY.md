@@ -690,3 +690,13 @@ by an engineer — nothing here guesses at them.
 - Migration `0008_business_os_repairs.sql` (tables + triggers; after `drizzle-kit push` run the trigger block by hand). Also adds permission `repairs.counter` and movement type `REPAIR_USE`.
 - Safe defaults awaiting owner decisions: no deposits; cash only; QC rule above. Not built: deposits/part-payments, refunds on repairs, warranty-on-repair tracking, customer SMS on status change, technician commission, parts reservation before approval.
 - Tests: 141 passing locally (rules, integration incl. concurrent collect, append-only triggers, 1-connection pool); browser-verified with cashier, manager and technician logins on a production build.
+
+## V. Business OS — Reports (Phase 8)
+
+- `/admin/business-os/reports` (permission `reports.view`: OWNER, MANAGER). Presets: today, yesterday, this/last week (Mon–Sun), this/last month, plus a custom date range (max one year). Days are Kampala calendar days.
+- Shows revenue, cash taken in, gross profit (with margin) and operating profit as **separate** figures, a day-by-day table, top products, cash-session reconciliation (sessions closed, variances, awaiting approval, supplier payments) and current stock value at cost.
+- Definitions (also on the page): revenue = shop sales after discount − refunds + repair payments; gross profit = revenue − cost of goods (returned goods give their cost back) − repair parts and external-technician costs; operating profit is an **estimate** — it subtracts only expenses recorded through the cash drawer, since rent/salaries are not tracked yet. Stock purchases and supplier payments are not expenses.
+- Honesty flags: sale lines with no cost price are counted and called out (gross profit is overstated by their missing cost); stock units with no cost are listed as "not valued".
+- CSV export (`…/reports/export?range=…|from=&to=&kind=daily|products`): permission re-checked server-side, audited (`report.exported`), formula-injection guarded, `no-store`.
+- Not included: online-store orders, mobile-money/card reconciliation, tax, per-cashier reports, saved/scheduled reports, charts.
+- Tests: reports unit tests (periods, definitions, CSV) and an integration test that books a known sale + refund + expense + repair and checks every figure as a before/after delta.
