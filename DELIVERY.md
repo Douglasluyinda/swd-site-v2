@@ -543,3 +543,29 @@ limits, payment methods accepted, offline POS priority, receipt/tax
 requirements, data retention) are explicitly flagged in that document
 as decisions that should come from the business owner, not be guessed
 by an engineer — nothing here guesses at them.
+
+## P. SWD Business OS — Phase 2 (Inventory ledger)
+
+- `/admin/business-os/inventory`: on-hand quantities, low-stock flags
+  (`products.reorder_level`), stock value at cost, recent movements, and a
+  "record stock movement" form (purchase receipt, customer/supplier return,
+  adjustment in/out, damage, loss). `inventory.manage` required server-side;
+  adjustments/damage/loss require a written reason; every movement is audited.
+- Ledger: `inventory_movements` is append-only (a Postgres trigger rejects
+  UPDATE/DELETE), `inventory_balances` holds the per-location running
+  quantity, and `products.stock` mirrors the total so the online storefront is
+  unchanged. All three change in one transaction with the balance row locked
+  (`lib/inventory.ts` `applyStockMovement`) — tested with 15 concurrent
+  removals against 10 units: exactly 10 succeed, stock ends at 0.
+- Migration `0004_business_os_inventory.sql` (replaces the unjournaled
+  hand-written foundation file; it contains both). It backfills existing
+  `products.stock` as `OPENING_BALANCE` ledger entries. Verified on a scratch
+  Postgres (backfill + trigger). **Known pre-existing issue:** migrations
+  0000–0003 can't replay on an empty database (0001 has an invalid
+  `ALTER ... TYPE serial`); production was built with `drizzle-kit push`, so
+  apply this to production with `npx drizzle-kit push` (additive only) after a
+  Neon backup/branch, or run the 0004 SQL by hand.
+- Not yet: stocktake, product variants in the ledger, multi-location UI,
+  stock valuation by FIFO/average cost, and POS/purchase flows that will
+  post SALE / PURCHASE_RECEIPT movements automatically. Online checkout does
+  not yet post SALE ledger entries — flagged for the POS/orders integration.

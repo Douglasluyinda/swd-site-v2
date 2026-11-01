@@ -29,6 +29,13 @@
       "when": 1792925510178,
       "tag": "0003_add_brand_fulfillment_affiliate",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1793491868670,
+      "tag": "0004_business_os_inventory",
+      "breakpoints": true
     }
   ]
 }

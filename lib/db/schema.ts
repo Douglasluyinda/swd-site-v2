@@ -6,6 +6,7 @@ import {
   integer,
   timestamp,
   boolean,
+  unique,
 } from "drizzle-orm/pg-core";
 
 // 1. ADMINS
@@ -122,6 +123,8 @@ export const products = pgTable("products", {
   brand: text("brand"),
   fulfillmentType: text("fulfillment_type").default("inventory").notNull(),
   affiliateUrl: text("affiliate_url"),
+  // Business OS: low-stock alert threshold (null = no alert).
+  reorderLevel: integer("reorder_level"),
 
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -306,4 +309,43 @@ export const settings = pgTable("settings", {
   key: text("key").notNull().unique(),
   value: text("value").notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// 17. BUSINESS OS INVENTORY — ledger-first. `inventory_movements` is
+// append-only (a DB trigger in migration 0005 rejects UPDATE/DELETE);
+// `inventory_balances` is the per-location running quantity maintained in
+// the same transaction as each movement, and `products.stock` mirrors the
+// sum across locations so the online storefront keeps working unchanged.
+export const inventoryLocations = pgTable("inventory_locations", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull().unique(),
+  active: boolean("active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const inventoryBalances = pgTable(
+  "inventory_balances",
+  {
+    id: serial("id").primaryKey(),
+    productId: integer("product_id").references(() => products.id).notNull(),
+    locationId: integer("location_id").references(() => inventoryLocations.id).notNull(),
+    quantity: integer("quantity").default(0).notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => [unique("inventory_balances_product_location_uq").on(t.productId, t.locationId)],
+);
+
+export const inventoryMovements = pgTable("inventory_movements", {
+  id: serial("id").primaryKey(),
+  productId: integer("product_id").references(() => products.id).notNull(),
+  locationId: integer("location_id").references(() => inventoryLocations.id).notNull(),
+  movementType: text("movement_type").notNull(),
+  quantityChange: integer("quantity_change").notNull(),
+  balanceAfter: integer("balance_after").notNull(),
+  unitCost: numeric("unit_cost", { precision: 12, scale: 2, mode: "number" }),
+  currency: text("currency").default("UGX").notNull(),
+  reference: text("reference"),
+  note: text("note"),
+  employeeId: integer("employee_id").references(() => admins.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
 });

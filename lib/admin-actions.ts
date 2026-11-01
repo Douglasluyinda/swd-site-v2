@@ -10,6 +10,8 @@ import { uploadProductImage } from "@/lib/blob";
 import { validateProductFulfillment } from "@/lib/product-fulfillment";
 import { hasPermission, isValidStaffRole } from "@/lib/rbac";
 import { recordAuditEvent } from "@/lib/audit";
+import { applyStockMovement } from "@/lib/inventory";
+import { MANUAL_MOVEMENT_TYPES, isMovementType } from "@/lib/inventory-ledger";
 
 const trackingStatusByOrderStatus: Record<string, string | undefined> = {
   SUPPLIER_ORDER_PENDING: "supplier_processing",
@@ -344,4 +346,52 @@ export async function setStaffActive(staffIdInput: string, active: boolean) {
   });
 
   revalidatePath("/admin/business-os/staff");
+}
+
+// --- SWD Business OS: inventory ---------------------------------------
+
+export async function recordStockMovement(formData: FormData) {
+  const session = await getCurrentStaffSession();
+  if (!session) throw new Error("Not signed in.");
+  if (!hasPermission(session.staffRole, "inventory.manage")) {
+    throw new Error("You do not have permission to change stock.");
+  }
+
+  const productId = Number(formData.get("productId"));
+  const type = (formData.get("movementType") as string) || "";
+  const quantity = Number(formData.get("quantity"));
+  const unitCostRaw = ((formData.get("unitCost") as string) || "").trim();
+  const reference = ((formData.get("reference") as string) || "").trim() || null;
+  const note = ((formData.get("note") as string) || "").trim() || null;
+
+  if (!Number.isInteger(productId) || productId <= 0) throw new Error("Choose a product.");
+  if (!isMovementType(type) || !MANUAL_MOVEMENT_TYPES.includes(type)) {
+    throw new Error("Invalid movement type.");
+  }
+  const unitCost = unitCostRaw ? Number(unitCostRaw) : null;
+  if (unitCost !== null && (!Number.isFinite(unitCost) || unitCost < 0)) {
+    throw new Error("Unit cost must be a non-negative number.");
+  }
+
+  const { balanceAfter } = await applyStockMovement({
+    productId,
+    type,
+    quantity,
+    unitCost,
+    reference,
+    note,
+    employeeId: Number(session.adminId),
+  });
+
+  // Stock changes are audit-relevant per the Business OS spec.
+  await recordAuditEvent({
+    actorId: Number(session.adminId),
+    actorEmail: session.email,
+    action: "inventory.movement",
+    entityType: "product",
+    entityId: productId,
+    metadata: { type, quantity, balanceAfter, reference, note },
+  });
+
+  revalidatePath("/admin/business-os/inventory");
 }

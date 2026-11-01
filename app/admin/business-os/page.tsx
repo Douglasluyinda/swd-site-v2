@@ -22,7 +22,7 @@ const modules: {
   {
     title: "Inventory",
     description: "Stock, purchases and stock movements.",
-    href: null,
+    href: "/admin/business-os/inventory",
     permission: "inventory.view",
   },
   {
