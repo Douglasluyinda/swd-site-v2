@@ -9,6 +9,12 @@ export const metadata: Metadata = {
   description: "Oraimo earbuds, power banks, chargers, and accessories from SWD Access.",
 };
 
+// Reads products from the database, so it must render per request. As a static page
+// it queried the database at BUILD time, and any build where the database was
+// unreachable or behind on migrations (e.g. a Vercel deploy before `0003` was applied)
+// failed the whole deployment.
+export const dynamic = "force-dynamic";
+
 // Category tiles shown here are informational (what the collection is
 // organized into), independent of whether any product has been published
 // in that category yet — avoids an empty page before the first listing
