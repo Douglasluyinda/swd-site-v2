@@ -3,7 +3,7 @@ import { and, asc, desc, eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db/client";
 import { admins, customers, products, repairEvents, repairParts, repairPayments, repairTickets } from "@/lib/db/schema";
-import { getCurrentStaffSession } from "@/lib/admin-auth";
+import { getCurrentStaffSession } from "@/lib/staff-session";
 import { hasPermission } from "@/lib/rbac";
 import {
   answerRepairQuote, assignRepairTechnician, collectRepair, fitRepairPart, moveRepairStatus, quoteRepair, saveRepairDiagnosis,

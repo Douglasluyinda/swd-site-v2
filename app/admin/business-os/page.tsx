@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getCurrentStaffSession } from "@/lib/admin-auth";
+import { getCurrentStaffSession } from "@/lib/staff-session";
 import { hasPermission, type Permission } from "@/lib/rbac";
 import { buildAlerts } from "@/lib/alerts";
 import { loadAlertCounts } from "@/lib/alert-queries";

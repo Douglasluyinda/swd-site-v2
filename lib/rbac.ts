@@ -12,6 +12,7 @@ export type StaffRole = "OWNER" | "MANAGER" | "CASHIER" | "TECHNICIAN";
 export const STAFF_ROLES: StaffRole[] = ["OWNER", "MANAGER", "CASHIER", "TECHNICIAN"];
 
 export type Permission =
+  | "store.manage" // legacy online-store admin: orders, products, coupons, shipping, suppliers (OWNER, MANAGER)
   | "staff.manage" // create/deactivate employees, assign roles
   | "pos.sell" // take POS sales
   | "pos.refund" // process refunds/returns
@@ -33,6 +34,7 @@ export type Permission =
 
 const ROLE_PERMISSIONS: Record<StaffRole, Permission[]> = {
   OWNER: [
+    "store.manage",
     "staff.manage",
     "pos.sell",
     "pos.refund",
@@ -53,6 +55,7 @@ const ROLE_PERMISSIONS: Record<StaffRole, Permission[]> = {
     "sops.manage",
   ],
   MANAGER: [
+    "store.manage",
     "pos.sell",
     "pos.refund",
     "inventory.manage",

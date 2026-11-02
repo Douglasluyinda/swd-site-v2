@@ -2,7 +2,7 @@ import { eq, sql } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db/client";
 import { admins, saleItems, salePayments, saleReturnItems, saleReturns, sales } from "@/lib/db/schema";
-import { getCurrentStaffSession } from "@/lib/admin-auth";
+import { getCurrentStaffSession } from "@/lib/staff-session";
 import { hasPermission } from "@/lib/rbac";
 import { processReturn } from "@/lib/admin-actions";
 import { returnableQuantity } from "@/lib/pos";

@@ -13,6 +13,7 @@
     "db:migrate": "tsx lib/db/migrate.ts",
     "db:seed": "tsx lib/db/seed.ts",
     "db:seed-admin": "tsx lib/db/seed-admin.ts",
+    "db:verify": "tsx scripts/db/verify.ts",
     "db:seed-oraimo-categories": "tsx lib/db/seed-oraimo-categories.ts"
   },
   "dependencies": {

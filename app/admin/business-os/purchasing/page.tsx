@@ -2,7 +2,7 @@ import Link from "next/link";
 import { desc, eq } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { products, purchaseOrders, suppliers } from "@/lib/db/schema";
-import { getCurrentStaffSession } from "@/lib/admin-auth";
+import { getCurrentStaffSession } from "@/lib/staff-session";
 import { hasPermission } from "@/lib/rbac";
 import { getSupplierBalance } from "@/lib/purchase-orders";
 import { addSupplierInvoice, addSupplierPayment } from "@/lib/admin-actions";

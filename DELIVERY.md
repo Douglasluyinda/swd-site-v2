@@ -735,3 +735,11 @@ by an engineer — nothing here guesses at them.
 - **Owner decision still open:** whether offline mode is needed at all, and which till is the designated one (default: off).
 - Migration `0011_business_os_offline_pos.sql` (two tables + two `sales` columns). No triggers.
 - Tests: 193+ passing locally — offline rules, the IndexedDB queue (fake-indexeddb), and integration for sync (recorded at original time, duplicate-safe, each conflict kept for a manager, session rules, off-switch, one-terminal rule). Browser-verified on a production build: till opened with the network switched off, sale queued with a provisional receipt, auto-synced to an official receipt when the network returned; manager saw and resolved a failed sale, cashier was blocked from that page.
+
+## Z. Production readiness (Phase 12)
+
+Full review in `docs/BUSINESS_OS_READINESS.md`. Headlines:
+- **Fixed:** a deactivated or demoted employee kept their access until their 8-hour cookie expired. Every page/action/API route now re-checks the employee in the database (`lib/staff-session.ts`); a test fails if a Business OS page skips it. Security headers and `no-store` on admin routes added.
+- **Verified:** migrations `0004`–`0011` applied to a database built from the pre-Business-OS code give a schema identical to a fresh build, with legacy data backfilled and all triggers present. Backup→restore drill (`scripts/backup-restore-drill.sh`) passes.
+- **Supersedes the earlier deploy note** ("`drizzle-kit push`, then run the triggers by hand"): apply the SQL files `0004`…`0011` in order with `psql`; they contain the triggers.
+- **Open:** `npm audit` shows one upstream advisory chain (zod via `@vercel/blob`, latest version already installed); real-Neon, hardware and live-integration behaviour untested; owner decisions listed in the review.

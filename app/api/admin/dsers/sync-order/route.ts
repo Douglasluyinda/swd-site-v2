@@ -10,7 +10,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db/client";
 import { fulfillments, orderItems, orders, productVariants, products } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
-import { requireAdminSession } from "@/lib/admin-auth";
+import { requireAdminSession } from "@/lib/staff-session";
+import { hasPermission } from "@/lib/rbac";
 import { sendOrderToDsers, type DsersOrderItem } from "@/lib/dsers";
 
 type SyncOrderBody = {
@@ -21,6 +22,9 @@ export async function POST(req: NextRequest) {
   const session = await requireAdminSession(req);
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  if (!hasPermission(session.staffRole, "store.manage")) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   let body: SyncOrderBody;

@@ -1,7 +1,7 @@
 import { desc, eq } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { admins, cashMovements, cashSessions } from "@/lib/db/schema";
-import { getCurrentStaffSession } from "@/lib/admin-auth";
+import { getCurrentStaffSession } from "@/lib/staff-session";
 import { hasPermission } from "@/lib/rbac";
 import { getOpenSession, sessionTotals } from "@/lib/cash-sessions";
 import {

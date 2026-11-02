@@ -13,12 +13,11 @@ import { db } from "./db/client";
 import { admins } from "./db/schema";
 import { eq } from "drizzle-orm";
 import bcrypt from "bcryptjs";
-import type { NextRequest } from "next/server";
 
 export const ADMIN_COOKIE = "swd_admin_session";
 const SESSION_TTL_SECONDS = 60 * 60 * 8; // 8 hours
 
-type SessionPayload = {
+export type SessionPayload = {
   adminId: string;
   email: string;
   staffRole: string;
@@ -103,21 +102,9 @@ export async function isValidSessionToken(token: string | undefined | null): Pro
   return (await verifySessionToken(token)) !== null;
 }
 
-// For admin-only route handlers under app/api/admin/** — proxy.ts only
-// guards page routes under /admin/:path*, not /api/admin/:path*, so every
-// admin API route must call this itself.
-export async function requireAdminSession(req: NextRequest): Promise<SessionPayload | null> {
-  const token = req.cookies.get(ADMIN_COOKIE)?.value;
-  return verifySessionToken(token);
-}
-
-export async function getCurrentStaffSession(): Promise<SessionPayload | null> {
-  // Server Component / Server Action variant of requireAdminSession —
-  // reads the cookie via next/headers instead of a NextRequest.
-  const { cookies } = await import("next/headers");
-  const token = (await cookies()).get(ADMIN_COOKIE)?.value;
-  return verifySessionToken(token);
-}
+// NOTE: session lookups for pages, actions and API routes live in lib/staff-session.ts,
+// which re-checks the employee in the database (active + current role). This file only
+// verifies the signed cookie and is safe for the Edge proxy.
 
 // Node-runtime only (bcrypt) — used from the login route and server
 // actions, never from proxy.ts (Edge).

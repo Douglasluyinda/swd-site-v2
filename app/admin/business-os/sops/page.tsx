@@ -2,7 +2,7 @@ import Link from "next/link";
 import { asc } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { sopDocuments, sopVersions } from "@/lib/db/schema";
-import { getCurrentStaffSession } from "@/lib/admin-auth";
+import { getCurrentStaffSession } from "@/lib/staff-session";
 import { hasPermission } from "@/lib/rbac";
 import { loadSopRegister } from "@/lib/admin-actions";
 import { pendingForEmployee } from "@/lib/sop-service";

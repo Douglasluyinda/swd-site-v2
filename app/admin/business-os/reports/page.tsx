@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getCurrentStaffSession } from "@/lib/admin-auth";
+import { getCurrentStaffSession } from "@/lib/staff-session";
 import { hasPermission } from "@/lib/rbac";
 import { loadReport, loadStockValuation } from "@/lib/report-queries";
 import { PRESETS, customPeriod, kampalaDateKey, marginPercent, presetPeriod, type Preset } from "@/lib/reports";

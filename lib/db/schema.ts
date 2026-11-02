@@ -26,6 +26,9 @@ export const admins = pgTable("admins", {
   passwordHash: text("password_hash").notNull(),
   role: text("role").default("admin"),
   employeeNumber: text("employee_number"),
+  // DEFAULT "OWNER" IS DELIBERATE: when this column is first added to a live database,
+  // the existing admin(s) (who were the owner before roles existed) must stay owners.
+  // Every code path that creates an account sets staffRole explicitly (tested).
   staffRole: text("staff_role").default("OWNER").notNull(),
   active: boolean("active").default(true).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),

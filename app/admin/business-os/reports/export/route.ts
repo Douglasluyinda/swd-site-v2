@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getCurrentStaffSession } from "@/lib/admin-auth";
+import { getCurrentStaffSession } from "@/lib/staff-session";
 import { hasPermission } from "@/lib/rbac";
 import { recordAuditEvent } from "@/lib/audit";
 import { loadReport } from "@/lib/report-queries";

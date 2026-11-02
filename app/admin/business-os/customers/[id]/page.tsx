@@ -3,7 +3,7 @@ import { desc, eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db/client";
 import { admins, customerNotes, customers, repairTickets, sales } from "@/lib/db/schema";
-import { getCurrentStaffSession } from "@/lib/admin-auth";
+import { getCurrentStaffSession } from "@/lib/staff-session";
 import { hasPermission } from "@/lib/rbac";
 import { saveCustomer, saveCustomerNote } from "@/lib/admin-actions";
 import { CHANNELS, NOTE_KINDS } from "@/lib/customers";

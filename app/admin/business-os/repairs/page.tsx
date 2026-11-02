@@ -2,7 +2,7 @@ import Link from "next/link";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { customers, repairTickets } from "@/lib/db/schema";
-import { getCurrentStaffSession } from "@/lib/admin-auth";
+import { getCurrentStaffSession } from "@/lib/staff-session";
 import { hasPermission } from "@/lib/rbac";
 import { createRepairTicket } from "@/lib/admin-actions";
 import { ActionForm } from "@/components/ActionForm";

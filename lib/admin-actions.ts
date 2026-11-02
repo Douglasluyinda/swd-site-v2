@@ -5,7 +5,8 @@ import { fulfillments, orders, trackingEvents, products, suppliers, categories, 
 import { and, eq, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { notifyDelivered, notifyShipped } from "@/lib/notifications";
-import { getCurrentStaffSession, hashPassword } from "@/lib/admin-auth";
+import { hashPassword } from "@/lib/admin-auth";
+import { getCurrentStaffSession } from "@/lib/staff-session";
 import { uploadProductImage } from "@/lib/blob";
 import { validateProductFulfillment } from "@/lib/product-fulfillment";
 import { hasPermission, isValidStaffRole } from "@/lib/rbac";
@@ -27,6 +28,16 @@ import { addCorrection, addMovement, approveSession, closeSession, openSession }
 import { applyStockMovement } from "@/lib/inventory";
 import { MANUAL_MOVEMENT_TYPES, isMovementType } from "@/lib/inventory-ledger";
 
+// The original online-store admin actions below were written before roles existed
+// and only relied on "someone is signed in". Server actions can be invoked from any
+// page URL, so each one must check the role itself (OWNER/MANAGER only).
+async function requireStoreAdmin(permission: "store.manage" | "staff.manage" = "store.manage") {
+  const session = await getCurrentStaffSession();
+  if (!session) throw new Error("Not signed in.");
+  if (!hasPermission(session.staffRole, permission)) throw new Error("You do not have permission to do that.");
+  return session;
+}
+
 const trackingStatusByOrderStatus: Record<string, string | undefined> = {
   SUPPLIER_ORDER_PENDING: "supplier_processing",
   SUPPLIER_ORDERED: "supplier_processing",
@@ -37,6 +48,7 @@ const trackingStatusByOrderStatus: Record<string, string | undefined> = {
 };
 
 export async function updateOrderStatus(orderIdInput: string, status: string) {
+  await requireStoreAdmin();
   const orderId = Number(orderIdInput);
   await db.update(orders).set({ status, updatedAt: new Date() }).where(eq(orders.id, orderId));
 
@@ -54,6 +66,7 @@ export async function updateOrderStatus(orderIdInput: string, status: string) {
 }
 
 export async function sendToSupplier(orderIdInput: string, supplierOrderRef: string, supplierCost: number) {
+  await requireStoreAdmin();
   const orderId = Number(orderIdInput);
   const [existing] = await db
     .select()
@@ -86,6 +99,7 @@ export async function addTrackingInfo(
   carrier: string,
   trackingUrl: string,
 ) {
+  await requireStoreAdmin();
   const orderId = Number(orderIdInput);
   const [existing] = await db
     .select()
@@ -118,6 +132,7 @@ export async function addTrackingInfo(
 }
 
 export async function toggleProductStatus(productIdInput: string, status: string) {
+  await requireStoreAdmin();
   const productId = Number(productIdInput);
   await db.update(products).set({ status, updatedAt: new Date() }).where(eq(products.id, productId));
   revalidatePath("/admin/products");
@@ -125,6 +140,7 @@ export async function toggleProductStatus(productIdInput: string, status: string
 }
 
 export async function createProduct(formData: FormData) {
+  await requireStoreAdmin();
   const title = formData.get("title") as string;
   const slug = (formData.get("slug") as string) || title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
 
@@ -175,6 +191,7 @@ export async function createProduct(formData: FormData) {
 }
 
 export async function createSupplier(formData: FormData) {
+  await requireStoreAdmin();
   await db.insert(suppliers).values({
     name: formData.get("name") as string,
     country: formData.get("country") as string,
@@ -189,6 +206,7 @@ export async function createSupplier(formData: FormData) {
 }
 
 export async function createCategory(formData: FormData) {
+  await requireStoreAdmin();
   const name = formData.get("name") as string;
   const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
   await db.insert(categories).values({ name, slug });
@@ -196,6 +214,7 @@ export async function createCategory(formData: FormData) {
 }
 
 export async function createAdmin(formData: FormData) {
+  const session = await requireStoreAdmin("staff.manage");
   const email = formData.get("email") as string;
   const password = formData.get("password") as string;
   const name = (formData.get("name") as string) || email;
@@ -205,11 +224,13 @@ export async function createAdmin(formData: FormData) {
   }
 
   const passwordHash = await hashPassword(password);
-  await db.insert(admins).values({ email, passwordHash, name, role: "admin" });
+  await db.insert(admins).values({ email, passwordHash, name, role: "admin", staffRole: "OWNER" });
+  await recordAuditEvent({ actorId: Number(session.adminId), actorEmail: session.email, action: "staff.owner_created", entityType: "admin", entityId: email });
   revalidatePath("/admin/settings");
 }
 
 export async function createCoupon(formData: FormData) {
+  await requireStoreAdmin();
   const code = (formData.get("code") as string).trim().toUpperCase();
   const percentOffRaw = formData.get("percentOff") as string;
   const amountOffRaw = formData.get("amountOff") as string;
@@ -229,6 +250,7 @@ export async function createCoupon(formData: FormData) {
 }
 
 export async function toggleCouponActive(couponIdInput: string, active: boolean) {
+  await requireStoreAdmin();
   const couponId = Number(couponIdInput);
   await db.update(coupons).set({ active }).where(eq(coupons.id, couponId));
   revalidatePath("/admin/coupons");
@@ -239,6 +261,7 @@ export async function toggleCouponActive(couponIdInput: string, active: boolean)
 // matches an order with city "Entebbe", "Uganda" matches any order in
 // Uganda whose city has no more specific rate configured.
 export async function createShippingRate(formData: FormData) {
+  await requireStoreAdmin();
   const region = ((formData.get("region") as string) || "").trim();
   const costRaw = formData.get("cost") as string;
   const estimatedDays = ((formData.get("estimatedDays") as string) || "").trim() || null;

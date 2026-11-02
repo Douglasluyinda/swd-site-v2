@@ -24,7 +24,7 @@ async function main() {
   }
 
   const passwordHash = await hashPassword(password);
-  await db.insert(admins).values({ email, passwordHash, name: name ?? email, role: "admin" });
+  await db.insert(admins).values({ email, passwordHash, name: name ?? email, role: "admin", staffRole: "OWNER" });
   console.log(`Created admin: ${email}`);
 }
 

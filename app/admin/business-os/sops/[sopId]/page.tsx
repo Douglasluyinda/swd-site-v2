@@ -3,7 +3,7 @@ import { and, desc, eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db/client";
 import { sopAcknowledgements, sopDocuments, sopVersions } from "@/lib/db/schema";
-import { getCurrentStaffSession } from "@/lib/admin-auth";
+import { getCurrentStaffSession } from "@/lib/staff-session";
 import { hasPermission } from "@/lib/rbac";
 import { acknowledgeSopAction, approveSopAction, beginSopDraft, discardSopDraftAction, saveSopDraftAction } from "@/lib/admin-actions";
 import { ackStatus, defaultReviewDate } from "@/lib/sop-service";

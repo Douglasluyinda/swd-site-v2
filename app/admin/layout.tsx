@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { AdminSignOut } from "@/components/AdminSignOut";
-import { ADMIN_COOKIE, isValidSessionToken } from "@/lib/admin-auth";
+import { ADMIN_COOKIE, verifySessionToken } from "@/lib/admin-auth";
+import { adminPathAllowed } from "@/lib/route-access";
 
 const navItems = [
   { href: "/admin", label: "Dashboard" },
@@ -20,9 +21,9 @@ const navItems = [
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const cookieStore = await cookies();
-  const authed = await isValidSessionToken(cookieStore.get(ADMIN_COOKIE)?.value);
+  const session = await verifySessionToken(cookieStore.get(ADMIN_COOKIE)?.value);
 
-  if (!authed) {
+  if (!session) {
     // Login page (or an unauthenticated hit that middleware hasn't caught
     // yet) — render without the sidebar chrome.
     return <div className="mx-auto max-w-7xl px-5 py-10 sm:px-8">{children}</div>;
@@ -33,7 +34,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       <aside className="hidden w-48 shrink-0 md:block">
         <p className="mb-4 px-2 text-sm font-semibold text-navy">SWD Admin</p>
         <nav className="space-y-0.5">
-          {navItems.map((item) => (
+          {navItems.filter((item) => adminPathAllowed(session.staffRole, item.href)).map((item) => (
             <Link
               key={item.href}
               href={item.href}

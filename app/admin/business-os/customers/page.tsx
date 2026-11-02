@@ -2,7 +2,7 @@ import Link from "next/link";
 import { desc, ilike, isNotNull, or } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { customers } from "@/lib/db/schema";
-import { getCurrentStaffSession } from "@/lib/admin-auth";
+import { getCurrentStaffSession } from "@/lib/staff-session";
 import { hasPermission } from "@/lib/rbac";
 import { registerCustomer } from "@/lib/admin-actions";
 

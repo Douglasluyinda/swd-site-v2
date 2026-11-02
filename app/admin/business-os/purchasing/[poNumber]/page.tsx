@@ -4,7 +4,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db/client";
 import { goodsReceiptItems, goodsReceipts, products, purchaseOrderItems, purchaseOrders, suppliers } from "@/lib/db/schema";
-import { getCurrentStaffSession } from "@/lib/admin-auth";
+import { getCurrentStaffSession } from "@/lib/staff-session";
 import { hasPermission } from "@/lib/rbac";
 import { approvePo, cancelPo, receivePoGoods } from "@/lib/admin-actions";
 import { canApprovePo, remainingToReceive } from "@/lib/purchasing";

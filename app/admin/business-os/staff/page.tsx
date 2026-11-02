@@ -1,7 +1,7 @@
 import { db } from "@/lib/db/client";
 import { admins } from "@/lib/db/schema";
 import { desc } from "drizzle-orm";
-import { getCurrentStaffSession } from "@/lib/admin-auth";
+import { getCurrentStaffSession } from "@/lib/staff-session";
 import { hasPermission, STAFF_ROLES } from "@/lib/rbac";
 import { createStaffAccount, setStaffActive, setStaffRole } from "@/lib/admin-actions";
 

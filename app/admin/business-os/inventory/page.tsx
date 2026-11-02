@@ -1,7 +1,7 @@
 import { desc, eq } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { inventoryBalances, inventoryMovements, products, admins } from "@/lib/db/schema";
-import { getCurrentStaffSession } from "@/lib/admin-auth";
+import { getCurrentStaffSession } from "@/lib/staff-session";
 import { hasPermission } from "@/lib/rbac";
 import { recordStockMovement } from "@/lib/admin-actions";
 import { MANUAL_MOVEMENT_TYPES, isLowStock } from "@/lib/inventory-ledger";
