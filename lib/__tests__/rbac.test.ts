@@ -46,6 +46,16 @@ describe("hasPermission", () => {
     expect(hasPermission("CASHIER", "repairs.manage")).toBe(false);
   });
 
+  it("sops: everyone reads and acknowledges, only owner/manager write", () => {
+    for (const r of ["OWNER", "MANAGER", "CASHIER", "TECHNICIAN"]) {
+      expect(hasPermission(r, "sops.read")).toBe(true);
+      expect(hasPermission(r, "sops.acknowledge")).toBe(true);
+    }
+    expect(hasPermission("MANAGER", "sops.manage")).toBe(true);
+    expect(hasPermission("CASHIER", "sops.manage")).toBe(false);
+    expect(hasPermission("TECHNICIAN", "sops.manage")).toBe(false);
+  });
+
   it("denies everything for a null, undefined, or invalid role (default deny)", () => {
     expect(hasPermission(null, "pos.sell")).toBe(false);
     expect(hasPermission(undefined, "pos.sell")).toBe(false);

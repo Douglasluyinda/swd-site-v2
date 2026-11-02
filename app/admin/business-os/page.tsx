@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getCurrentStaffSession } from "@/lib/admin-auth";
 import { hasPermission, type Permission } from "@/lib/rbac";
+import { pendingForEmployee } from "@/lib/sop-service";
 
 // SWD Business OS — module launcher. Only modules with real, working
 // screens behind them are clickable; everything else is phase-tracked
@@ -66,6 +67,7 @@ const modules: {
 export default async function BusinessOsPage() {
   const session = await getCurrentStaffSession();
   const role = session?.staffRole ?? null;
+  const sopsPending = session ? (await pendingForEmployee(Number(session.adminId), role)).length : 0;
 
   return (
     <div>
@@ -111,6 +113,13 @@ export default async function BusinessOsPage() {
           );
         })}
       </div>
+
+      {hasPermission(role, "sops.read") && (
+        <p className="mt-6 text-sm">
+          <Link href="/admin/business-os/sops" className="text-blue hover:underline">SOP library</Link>
+          {sopsPending > 0 && <span className="ml-2 rounded-full bg-light px-2 py-0.5 text-xs font-medium text-navy">{sopsPending} to acknowledge</span>}
+        </p>
+      )}
 
       <p className="mt-8 text-xs text-slate">
         Role: <span className="font-medium text-navy">{role ?? "unknown"}</span>. Module access is

@@ -700,3 +700,15 @@ by an engineer — nothing here guesses at them.
 - CSV export (`…/reports/export?range=…|from=&to=&kind=daily|products`): permission re-checked server-side, audited (`report.exported`), formula-injection guarded, `no-store`.
 - Not included: online-store orders, mobile-money/card reconciliation, tax, per-cashier reports, saved/scheduled reports, charts.
 - Tests: reports unit tests (periods, definitions, CSV) and an integration test that books a known sale + refund + expense + repair and checks every figure as a before/after delta.
+
+## W. Business OS — SOP library (Phase 9)
+
+- `/admin/business-os/sops`: the register, with active version, review date (overdue / due soon flagged) and whether you still have to acknowledge. Staff see **approved** procedures only; owners/managers also see drafts and unwritten entries. The Business OS dashboard shows how many SOPs you still have to acknowledge.
+- Owner clicks "Load the 20-SOP register" once (idempotent). It adds the 20 SOP ids/titles/owners from the Document Pack. The ten procedures the pack wrote out (001, 002, 004, 005, 008, 009, 013, 014, 015, 016) arrive as **DRAFT v1 awaiting approval**; the other ten (003, 006, 007, 010, 011, 012, 017–020) are listed with no text. Nothing was invented or auto-approved — SOP-014 names a "Repair coordinator" role that does not exist yet (treated as Manager/Owner).
+- Versioning: only a DRAFT is editable; "Start a new version" copies the current text; the active version stays in force until the owner approves the draft, which supersedes it (exactly one active version per SOP, enforced by a unique index). Approval needs a future review date.
+- Approval (safe default pending owner decision): OWNER only; an owner may approve a draft they wrote; managers write drafts but cannot approve.
+- Acknowledgements are per version, per employee, append-only (DB trigger). A new approved version needs fresh acknowledgements; the SOP page lists who is still outstanding. Which roles must acknowledge is set per SOP (defaults from the register's owner roles — review them).
+- Permissions: `sops.read` + `sops.acknowledge` for all roles, `sops.manage` for OWNER/MANAGER. Every action is permission-checked server-side and audited (`sop.*`).
+- Migration `0009_business_os_sops.sql` (tables + ack trigger; the trigger reuses `repair_append_only` from 0008 — run the trigger block by hand after a push).
+- Not built: PDF/print layout, per-role acknowledgement deadlines, reminders by SMS/email, attachments/images in SOPs, revision comparison.
+- Tests: 164 passing locally (SOP rules, seed integrity, integration for approval/acknowledgement/supersede/concurrent approval/immutability); browser-verified with owner, manager, cashier and technician logins.

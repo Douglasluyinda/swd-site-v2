@@ -26,6 +26,9 @@ export type Permission =
   | "cash.session" // open/close own cash session
   | "cash.reconcile" // review/approve cash sessions, variance
   | "reports.view"
+  | "sops.read" // view approved SOPs
+  | "sops.acknowledge"
+  | "sops.manage" // write drafts, see acknowledgement status (approval is OWNER-only via settings.manage)
   | "settings.manage";
 
 const ROLE_PERMISSIONS: Record<StaffRole, Permission[]> = {
@@ -45,6 +48,9 @@ const ROLE_PERMISSIONS: Record<StaffRole, Permission[]> = {
     "cash.reconcile",
     "reports.view",
     "settings.manage",
+    "sops.read",
+    "sops.acknowledge",
+    "sops.manage",
   ],
   MANAGER: [
     "pos.sell",
@@ -59,9 +65,12 @@ const ROLE_PERMISSIONS: Record<StaffRole, Permission[]> = {
     "cash.session",
     "cash.reconcile",
     "reports.view",
+    "sops.read",
+    "sops.acknowledge",
+    "sops.manage",
   ],
-  CASHIER: ["pos.sell", "inventory.view", "customers.manage", "cash.session", "repairs.counter"],
-  TECHNICIAN: ["repairs.update", "inventory.view"],
+  CASHIER: ["pos.sell", "inventory.view", "customers.manage", "cash.session", "repairs.counter", "sops.read", "sops.acknowledge"],
+  TECHNICIAN: ["repairs.update", "inventory.view", "sops.read", "sops.acknowledge"],
 };
 
 export function hasPermission(role: string | null | undefined, permission: Permission): boolean {

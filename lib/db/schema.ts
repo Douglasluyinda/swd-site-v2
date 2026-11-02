@@ -607,3 +607,55 @@ export const repairPayments = pgTable("repair_payments", {
   employeeId: integer("employee_id").references(() => admins.id).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
+
+// 23. BUSINESS OS SOPs. One document per SOP id; content lives in versions.
+// Only DRAFT versions are editable; approving makes a version the single
+// APPROVED one (partial unique index) and supersedes the previous. Staff
+// acknowledge a specific version, so a new version needs fresh acknowledgements.
+export const sopDocuments = pgTable("sop_documents", {
+  id: serial("id").primaryKey(),
+  sopId: text("sop_id").notNull().unique(), // SOP-001
+  title: text("title").notNull(),
+  ownerRole: text("owner_role").notNull(), // free text as in the register, e.g. "Owner/Manager"
+  applicableRoles: text("applicable_roles").notNull(), // comma list of staff roles who must acknowledge
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const sopVersions = pgTable(
+  "sop_versions",
+  {
+    id: serial("id").primaryKey(),
+    documentId: integer("document_id").references(() => sopDocuments.id).notNull(),
+    version: integer("version").notNull(),
+    status: text("status").default("DRAFT").notNull(), // DRAFT | APPROVED | SUPERSEDED
+    purpose: text("purpose"),
+    scope: text("scope"),
+    body: text("body").notNull().default(""), // one step per line
+    exceptions: text("exceptions"),
+    escalation: text("escalation"),
+    records: text("records"),
+    changeNote: text("change_note"),
+    effectiveDate: text("effective_date"), // YYYY-MM-DD, set on approval
+    reviewDate: text("review_date"), // YYYY-MM-DD
+    authoredBy: integer("authored_by").references(() => admins.id),
+    approvedBy: integer("approved_by").references(() => admins.id),
+    approvedAt: timestamp("approved_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => [
+    unique("sop_versions_doc_version_uq").on(t.documentId, t.version),
+    uniqueIndex("sop_one_approved_per_doc").on(t.documentId).where(sql`${t.status} = 'APPROVED'`),
+    uniqueIndex("sop_one_draft_per_doc").on(t.documentId).where(sql`${t.status} = 'DRAFT'`),
+  ],
+);
+
+export const sopAcknowledgements = pgTable(
+  "sop_acknowledgements",
+  {
+    id: serial("id").primaryKey(),
+    versionId: integer("version_id").references(() => sopVersions.id).notNull(),
+    employeeId: integer("employee_id").references(() => admins.id).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => [unique("sop_ack_version_employee_uq").on(t.versionId, t.employeeId)],
+);

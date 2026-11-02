@@ -15,6 +15,7 @@ import {
   approvePurchaseOrder, cancelPurchaseOrder, createPurchaseOrder, receiveGoods,
   recordSupplierInvoice, recordSupplierPayment,
 } from "@/lib/purchase-orders";
+import { acknowledge as acknowledgeSop, approveDraft as approveSopDraft, discardDraft as discardSopDraft, saveDraft as saveSopDraft, seedRegister, startDraft as startSopDraft } from "@/lib/sop-service";
 import { addPart, answerQuote, assignTechnician, changeStatus as changeRepairStatus, collectDevice, createTicket, saveDiagnosis, submitQuote } from "@/lib/repair-service";
 import type { RepairStatus } from "@/lib/repairs";
 import { addCustomerNote, findOrCreateByPhone, updateCustomer } from "@/lib/customer-service";
@@ -794,5 +795,78 @@ export async function collectRepair(f: FormData) {
     const ticketId = num(f, "ticketId");
     const { paid } = await collectDevice({ ticketId, actor: x.actor });
     return { audit: "repair.collected", ticketId, message: paid > 0 ? `Collected — ${paid.toLocaleString()} UGX cash taken` : "Returned", metadata: { paid } };
+  });
+}
+
+// --- SWD Business OS: SOPs ------------------------------------------------
+
+async function sopAction(
+  permission: Parameters<typeof hasPermission>[1],
+  what: string,
+  fn: (s: NonNullable<Awaited<ReturnType<typeof getCurrentStaffSession>>>, actor: { id: number; role: string }) => Promise<{ audit: string; sopId: string; message?: string; metadata?: Record<string, unknown> }>,
+): Promise<RepairResult> {
+  try {
+    const s = await getCurrentStaffSession();
+    if (!s) throw new Error("Not signed in.");
+    if (!hasPermission(s.staffRole, permission)) throw new Error(`You do not have permission to ${what}.`);
+    const out = await fn(s, { id: Number(s.adminId), role: s.staffRole ?? "" });
+    await recordAuditEvent({ actorId: Number(s.adminId), actorEmail: s.email, action: out.audit, entityType: "sop", entityId: out.sopId, metadata: out.metadata });
+    revalidatePath("/admin/business-os/sops");
+    revalidatePath(`/admin/business-os/sops/${out.sopId}`);
+    return { ok: true, message: out.message };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Something went wrong." };
+  }
+}
+
+export async function loadSopRegister() {
+  return sopAction("settings.manage", "load the SOP register", async (_s, a) => {
+    const r = await seedRegister(a.id);
+    return { audit: "sop.register_loaded", sopId: "ALL", message: `Added ${r.docs} SOPs and ${r.drafts} drafts.`, metadata: r };
+  });
+}
+
+export async function beginSopDraft(f: FormData) {
+  return sopAction("sops.manage", "edit SOPs", async (_s, a) => {
+    const sopId = str(f, "sopId");
+    await startSopDraft({ sopId, by: a.id });
+    return { audit: "sop.draft_started", sopId };
+  });
+}
+
+export async function saveSopDraftAction(f: FormData) {
+  return sopAction("sops.manage", "edit SOPs", async (_s, a) => {
+    const sopId = str(f, "sopId");
+    await saveSopDraft({
+      sopId, by: a.id, purpose: str(f, "purpose"), scope: str(f, "scope"), body: str(f, "body"), exceptions: str(f, "exceptions"),
+      escalation: str(f, "escalation"), records: str(f, "records"), reviewDate: str(f, "reviewDate"), changeNote: str(f, "changeNote"),
+      roles: f.getAll("roles").map(String),
+    });
+    return { audit: "sop.draft_saved", sopId, message: "Draft saved" };
+  });
+}
+
+export async function discardSopDraftAction(f: FormData) {
+  return sopAction("sops.manage", "edit SOPs", async () => {
+    const sopId = str(f, "sopId");
+    await discardSopDraft({ sopId });
+    return { audit: "sop.draft_discarded", sopId };
+  });
+}
+
+export async function approveSopAction(f: FormData) {
+  // Owner-only: settings.manage is OWNER-only, and the rule re-checks the role.
+  return sopAction("settings.manage", "approve SOPs", async (_s, a) => {
+    const sopId = str(f, "sopId");
+    const r = await approveSopDraft({ sopId, actor: a });
+    return { audit: "sop.approved", sopId, message: `Version ${r.version} is now the active procedure.`, metadata: { version: r.version } };
+  });
+}
+
+export async function acknowledgeSopAction(f: FormData) {
+  return sopAction("sops.acknowledge", "acknowledge SOPs", async (_s, a) => {
+    const sopId = str(f, "sopId");
+    const r = await acknowledgeSop({ sopId, employeeId: a.id, role: a.role });
+    return { audit: "sop.acknowledged", sopId, message: "Thank you — recorded.", metadata: { version: r.version } };
   });
 }
