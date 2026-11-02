@@ -6,6 +6,8 @@ import { hasPermission } from "@/lib/rbac";
 import { saveBusinessSetting } from "@/lib/admin-actions";
 import { getSettings } from "@/lib/settings-service";
 import { DEFAULT_SETTINGS, SETTING_DEFS } from "@/lib/settings";
+import { activeTerminal } from "@/lib/offline-service";
+import { deactivateOfflineTerminal } from "@/lib/admin-actions";
 import { ActionForm } from "@/components/ActionForm";
 
 const input = "w-32 rounded-lg border border-border-strong px-3 py-2 text-sm";
@@ -21,6 +23,7 @@ export default async function SettingsPage() {
     );
   }
   const current = await getSettings();
+  const terminal = await activeTerminal();
   const changes = await db
     .select({ at: auditLogs.createdAt, key: auditLogs.entityId, meta: auditLogs.metadata, by: admins.name, email: auditLogs.actorEmail })
     .from(auditLogs).leftJoin(admins, eq(admins.id, auditLogs.actorId))
@@ -46,6 +49,18 @@ export default async function SettingsPage() {
             </div>
           </ActionForm>
         ))}
+      </div>
+      <div className="rounded-xl border border-border bg-white p-5 text-sm">
+        <p className="font-medium text-slate">Offline till</p>
+        {terminal ? (
+          <ActionForm action={async () => { "use server"; return deactivateOfflineTerminal(); }} className="mt-2">
+            <p className="text-navy">&ldquo;{terminal.name}&rdquo; is the registered offline terminal (since {terminal.createdAt.toISOString().slice(0, 10)}).</p>
+            <button className="mt-2 rounded-lg bg-light px-4 py-2 text-sm font-medium text-navy hover:bg-border">Deactivate it</button>
+            <p className="mt-1 text-xs text-slate">Sales already queued on it can still sync only while a terminal is registered; deactivating strands them — sync first.</p>
+          </ActionForm>
+        ) : (
+          <p className="mt-2 text-slate">No terminal registered. Turn on &ldquo;Offline cash sales&rdquo; above, then open Sales &amp; POS on the till you choose and press &ldquo;Use this device as the offline terminal&rdquo;.</p>
+        )}
       </div>
       <div className="rounded-xl border border-border bg-white p-5 text-sm">
         <p className="font-medium text-slate">Recent changes</p>

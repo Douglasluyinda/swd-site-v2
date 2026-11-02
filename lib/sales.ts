@@ -12,6 +12,7 @@ import {
 import { applyStockMovement } from "@/lib/inventory";
 import { getOpenSession } from "@/lib/cash-sessions";
 import { findOrCreateByPhone } from "@/lib/customer-service";
+import { priceMatches, sessionCoversSale } from "@/lib/offline";
 import { getSettings } from "@/lib/settings-service";
 import { discountLimits } from "@/lib/settings";
 import { normalizePhone } from "@/lib/customers";
@@ -33,6 +34,8 @@ export type CreateSaleInput = {
   tendered: number;
   customerName?: string | null;
   customerPhone?: string | null;
+  // Set only by the offline sync: the sale happened earlier on the designated till.
+  offline?: { terminalId: string; occurredAt: Date; expectedTotal: number };
 };
 
 // One atomic operation: validate → re-price from the DB (never trust client
@@ -61,6 +64,10 @@ export async function createSale(input: CreateSaleInput): Promise<{ receiptNumbe
   });
 
   const totals = computeSale(priced, input.discountPercent);
+  if (input.offline) {
+    const pm = priceMatches(totals.total, input.offline.expectedTotal);
+    if (pm) throw new Error(pm);
+  }
   const err = validateSaleInput({
     lines: input.lines,
     discountPercent: input.discountPercent,
@@ -76,6 +83,9 @@ export async function createSale(input: CreateSaleInput): Promise<{ receiptNumbe
       // Cash handling must be attributable: no open session, no cash sale.
       const session = await getOpenSession(tx as unknown as typeof db, input.employeeId);
       if (!session) throw new Error("Open a cash session before making a sale.");
+      if (input.offline && !sessionCoversSale(session.openedAt, input.offline.occurredAt)) {
+        throw new Error("Your cash session was opened after this sale happened (the earlier one is closed). Ask a manager.");
+      }
 
       // Walk-ins stay anonymous. If a phone is given, link (or register) the
       // customer so purchase history builds up — a bad phone fails the sale
@@ -111,6 +121,9 @@ export async function createSale(input: CreateSaleInput): Promise<{ receiptNumbe
           discountPercent: input.discountPercent,
           discountAmount: totals.discount,
           total: totals.total,
+          ...(input.offline
+            ? { offlineTerminalId: input.offline.terminalId, createdAt: input.offline.occurredAt, syncedAt: new Date() }
+            : {}),
         })
         .returning({ id: sales.id });
 

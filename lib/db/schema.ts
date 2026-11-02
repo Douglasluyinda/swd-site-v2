@@ -383,6 +383,10 @@ export const sales = pgTable("sales", {
   discountAmount: numeric("discount_amount", { precision: 12, scale: 2, mode: "number" }).default(0).notNull(),
   total: numeric("total", { precision: 12, scale: 2, mode: "number" }).notNull(),
   currency: text("currency").default("UGX").notNull(),
+  // Offline-queued sales: created_at is when the customer actually paid;
+  // synced_at is when the server recorded it.
+  offlineTerminalId: text("offline_terminal_id"),
+  syncedAt: timestamp("synced_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -668,4 +672,34 @@ export const appSettings = pgTable("app_settings", {
   value: text("value").notNull(),
   updatedBy: integer("updated_by").references(() => admins.id),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// 25. BUSINESS OS OFFLINE POS. Exactly one designated terminal may queue offline
+// cash sales (ADR-006): a partial unique index allows one active row. Sync
+// failures are kept on the server so a lost device cannot lose the evidence.
+export const posTerminals = pgTable(
+  "pos_terminals",
+  {
+    id: text("id").primaryKey(), // random id stored on the device
+    name: text("name").notNull(),
+    active: boolean("active").default(true).notNull(),
+    registeredBy: integer("registered_by").references(() => admins.id).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    deactivatedAt: timestamp("deactivated_at"),
+  },
+  (t) => [uniqueIndex("pos_one_active_terminal").on(t.active).where(sql`${t.active} = true`)],
+);
+
+export const offlineSyncFailures = pgTable("offline_sync_failures", {
+  id: serial("id").primaryKey(),
+  clientId: text("client_id").notNull(), // the sale's idempotency key
+  employeeId: integer("employee_id").references(() => admins.id).notNull(),
+  terminalId: text("terminal_id"),
+  reason: text("reason").notNull(),
+  payload: text("payload").notNull(), // JSON of what the till recorded
+  occurredAt: timestamp("occurred_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  resolvedAt: timestamp("resolved_at"),
+  resolvedBy: integer("resolved_by").references(() => admins.id),
+  resolutionNote: text("resolution_note"),
 });

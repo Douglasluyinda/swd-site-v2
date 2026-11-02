@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { buildAlerts, type AlertCounts } from "@/lib/alerts";
 
-const zero: AlertCounts = { lowStock: 0, cashPendingApproval: 0, cashLeftOpen: 0, poAwaitingApproval: 0, quotesWaiting: 0, repairsUncollected: 0, sopReviewsDue: 0 };
+const zero: AlertCounts = { lowStock: 0, cashPendingApproval: 0, cashLeftOpen: 0, poAwaitingApproval: 0, quotesWaiting: 0, repairsUncollected: 0, sopReviewsDue: 0, offlineSyncIssues: 0 };
 
 describe("alerts", () => {
   it("nothing to report means no alerts", () => expect(buildAlerts(zero, "OWNER")).toEqual([]));

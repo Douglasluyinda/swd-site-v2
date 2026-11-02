@@ -1,8 +1,8 @@
 "use server";
 
 import { db } from "@/lib/db/client";
-import { fulfillments, orders, trackingEvents, products, suppliers, categories, admins, coupons, shippingRates } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { fulfillments, orders, trackingEvents, products, suppliers, categories, admins, coupons, shippingRates, offlineSyncFailures } from "@/lib/db/schema";
+import { and, eq, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { notifyDelivered, notifyShipped } from "@/lib/notifications";
 import { getCurrentStaffSession, hashPassword } from "@/lib/admin-auth";
@@ -16,6 +16,8 @@ import {
   recordSupplierInvoice, recordSupplierPayment,
 } from "@/lib/purchase-orders";
 import { acknowledge as acknowledgeSop, approveDraft as approveSopDraft, discardDraft as discardSopDraft, saveDraft as saveSopDraft, seedRegister, startDraft as startSopDraft } from "@/lib/sop-service";
+import { deactivateTerminal, registerTerminal, syncOfflineSale as syncOfflineSaleService, type SyncResult } from "@/lib/offline-service";
+import type { OfflineSale } from "@/lib/offline";
 import { isSettingKey } from "@/lib/settings";
 import { setSetting } from "@/lib/settings-service";
 import { addPart, answerQuote, assignTechnician, changeStatus as changeRepairStatus, collectDevice, createTicket, saveDiagnosis, submitQuote } from "@/lib/repair-service";
@@ -886,6 +888,66 @@ export async function saveBusinessSetting(f: FormData): Promise<RepairResult> {
     }
     revalidatePath("/admin/business-os/settings");
     return { ok: true, message: r.old === r.new ? "No change" : `Saved (was ${r.old.toLocaleString()})` };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Something went wrong." };
+  }
+}
+
+// --- SWD Business OS: offline POS -------------------------------------------
+
+export async function registerOfflineTerminal(name: string): Promise<{ ok: true; terminalId: string } | { ok: false; error: string }> {
+  try {
+    const s = await requireStaff("settings.manage", "register the offline terminal");
+    const r = await registerTerminal({ name, by: Number(s.adminId) });
+    await recordAuditEvent({ actorId: Number(s.adminId), actorEmail: s.email, action: "offline.terminal_registered", entityType: "pos_terminal", entityId: r.terminalId, metadata: { name } });
+    revalidatePath("/admin/business-os/settings");
+    return { ok: true, terminalId: r.terminalId };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Something went wrong." };
+  }
+}
+
+export async function deactivateOfflineTerminal(): Promise<RepairResult> {
+  try {
+    const s = await requireStaff("settings.manage", "deactivate the offline terminal");
+    await deactivateTerminal();
+    await recordAuditEvent({ actorId: Number(s.adminId), actorEmail: s.email, action: "offline.terminal_deactivated", entityType: "pos_terminal", entityId: "active" });
+    revalidatePath("/admin/business-os/settings");
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Something went wrong." };
+  }
+}
+
+export async function syncOfflineSale(sale: OfflineSale): Promise<SyncResult> {
+  const session = await getCurrentStaffSession();
+  if (!session) return { ok: false, error: "Not signed in.", retryable: true };
+  if (!hasPermission(session.staffRole, "pos.sell")) return { ok: false, error: "You do not have permission to make sales.", retryable: false };
+  const r = await syncOfflineSaleService({ sale, employeeId: Number(session.adminId), role: session.staffRole });
+  if (r.ok && !r.duplicate) {
+    await recordAuditEvent({
+      actorId: Number(session.adminId), actorEmail: session.email, action: "pos.sale_offline_synced", entityType: "sale",
+      entityId: r.receiptNumber, metadata: { occurredAt: sale.occurredAt, terminalId: sale.terminalId },
+    });
+    revalidatePath("/admin/business-os/inventory");
+  }
+  return r;
+}
+
+export async function resolveOfflineFailure(f: FormData): Promise<RepairResult> {
+  try {
+    const s = await requireStaff("cash.reconcile", "resolve offline sale problems");
+    const id = Number(f.get("id"));
+    const note = ((f.get("note") as string) || "").trim();
+    if (!note) throw new Error("Say how it was dealt with.");
+    const done = await db.update(offlineSyncFailures)
+      .set({ resolvedAt: new Date(), resolvedBy: Number(s.adminId), resolutionNote: note })
+      .where(and(eq(offlineSyncFailures.id, id), isNull(offlineSyncFailures.resolvedAt))).returning({ id: offlineSyncFailures.id });
+    if (!done.length) throw new Error("That problem is already resolved.");
+    await recordAuditEvent({ actorId: Number(s.adminId), actorEmail: s.email, action: "offline.failure_resolved", entityType: "offline_sync_failure", entityId: id, metadata: { note } });
+    revalidatePath("/admin/business-os/pos/offline-issues");
+    revalidatePath("/admin/business-os");
+    return { ok: true };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Something went wrong." };
   }

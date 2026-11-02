@@ -78,6 +78,13 @@
       "when": 1793591671168,
       "tag": "0010_business_os_settings",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1793611475922,
+      "tag": "0011_business_os_offline_pos",
+      "breakpoints": true
     }
   ]
 }

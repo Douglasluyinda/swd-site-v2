@@ -1,13 +1,23 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
-import { completeSale } from "@/lib/admin-actions";
+import { completeSale, registerOfflineTerminal, syncOfflineSale } from "@/lib/admin-actions";
 import { computeSale } from "@/lib/pos";
+import { availableAfterQueue, type OfflineSale } from "@/lib/offline";
+import { clearSynced, enqueue, getMeta, listQueue, recoverInterrupted, setMeta, updateItem, type QueuedSale } from "@/lib/offline-queue";
+
+function subscribeOnline(cb: () => void) {
+  window.addEventListener("online", cb);
+  window.addEventListener("offline", cb);
+  return () => { window.removeEventListener("online", cb); window.removeEventListener("offline", cb); };
+}
 
 type Item = { id: number; title: string; sku: string; price: number; onHand: number };
 
-export function PosTerminal({ items, maxDiscount }: { items: Item[]; maxDiscount: number }) {
+export function PosTerminal({
+  items: serverItems, maxDiscount, offlineEnabled, employeeId, canRegisterTerminal, catalogueAt,
+}: { items: Item[]; maxDiscount: number; offlineEnabled: boolean; employeeId: number; canRegisterTerminal: boolean; catalogueAt: string }) {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [cart, setCart] = useState<Record<number, number>>({});
@@ -20,6 +30,75 @@ export function PosTerminal({ items, maxDiscount }: { items: Item[]; maxDiscount
   // One key per cart attempt: a double-click or network retry resubmits the
   // same key, so the server returns the original sale instead of a duplicate.
   const [key, setKey] = useState(() => crypto.randomUUID());
+
+  // --- offline support (only active on the one registered terminal) ---
+  const online = useSyncExternalStore(subscribeOnline, () => navigator.onLine, () => true);
+  const [terminalId, setTerminalId] = useState<string | null>(null);
+  const [queue, setQueue] = useState<QueuedSale[]>([]);
+  const [syncing, setSyncing] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [savedOffline, setSavedOffline] = useState<{ q: QueuedSale; change: number; titles: string[] } | null>(null);
+  const offlineReady = offlineEnabled && !!terminalId;
+
+  const refreshQueue = useCallback(async () => { try { setQueue(await listQueue()); } catch { /* no IndexedDB */ } }, []);
+
+  const syncAll = useCallback(async () => {
+    if (!navigator.onLine) return;
+    setSyncing(true);
+    try {
+      for (const item of (await listQueue()).filter((i) => i.status === "PENDING_SYNC" && i.sale.employeeId === employeeId)) {
+        await updateItem(item.sale.clientId, { status: "SYNCING", attempts: item.attempts + 1 });
+        let r;
+        try { r = await syncOfflineSale(item.sale); } catch { await updateItem(item.sale.clientId, { status: "PENDING_SYNC" }); break; }
+        if (r.ok) await updateItem(item.sale.clientId, { status: "SYNCED", receiptNumber: r.receiptNumber, error: undefined });
+        else if (r.retryable) { await updateItem(item.sale.clientId, { status: "PENDING_SYNC", error: r.error }); setNotice(r.error); break; }
+        else await updateItem(item.sale.clientId, { status: "FAILED", error: r.error });
+      }
+    } finally {
+      setSyncing(false);
+      await refreshQueue();
+    }
+  }, [employeeId, refreshQueue]);
+
+  useEffect(() => {
+    const on = () => { void syncAll(); };
+    window.addEventListener("online", on);
+    return () => { window.removeEventListener("online", on); };
+  }, [syncAll]);
+
+  useEffect(() => {
+    if (!offlineEnabled) return;
+    (async () => {
+      try {
+        await recoverInterrupted();
+        const id = (await getMeta<string>("terminalId")) ?? null;
+        setTerminalId(id);
+        await refreshQueue();
+        if (id && "serviceWorker" in navigator) {
+          await setMeta("catalogueAt", catalogueAt);
+          await navigator.serviceWorker.register("/sw.js");
+          await navigator.serviceWorker.ready;
+          // Keep the page and its scripts so the till opens with no internet.
+          const cache = await caches.open("swd-pos-shell-v1");
+          const urls = new Set<string>();
+          document.querySelectorAll<HTMLScriptElement | HTMLLinkElement>("script[src], link[href]").forEach((el) => {
+            const u = new URL((el as HTMLScriptElement).src || (el as HTMLLinkElement).href, location.href);
+            if (u.origin === location.origin && u.pathname.startsWith("/_next/static/")) urls.add(u.pathname + u.search);
+          });
+          performance.getEntriesByType("resource").forEach((e) => { const u = new URL(e.name); if (u.origin === location.origin && u.pathname.startsWith("/_next/static/")) urls.add(u.pathname + u.search); });
+          await Promise.all([...urls].map((u) => cache.match(u).then(async (h) => { if (!h) await cache.add(u); }).catch(() => undefined)));
+          await fetch("/admin/business-os/pos", { headers: { "x-swd-warm": "1" }, credentials: "same-origin" }).catch(() => undefined);
+          if (navigator.onLine) void syncAll();
+        }
+      } catch { /* offline mode unavailable in this browser */ }
+    })();
+  }, [offlineEnabled, catalogueAt, refreshQueue, syncAll]);
+
+  // What the till can still sell: the page's stock snapshot minus sales queued since it was taken.
+  const items = useMemo(() => {
+    const since = queue.filter((q) => q.sale.occurredAt > catalogueAt).map((q) => q.sale);
+    return serverItems.map((i) => ({ ...i, onHand: availableAfterQueue(i.onHand, i.id, since) }));
+  }, [serverItems, queue, catalogueAt]);
 
   const byId = useMemo(() => new Map(items.map((i) => [i.id, i])), [items]);
   const shown = items
@@ -50,17 +129,46 @@ export function PosTerminal({ items, maxDiscount }: { items: Item[]; maxDiscount
     });
   }
 
+  async function queueOffline() {
+    const sale: OfflineSale = {
+      clientId: key, terminalId: terminalId!, employeeId, occurredAt: new Date().toISOString(),
+      lines: lines.map(({ productId, quantity }) => ({ productId, quantity })),
+      discountPercent: discount, expectedTotal: totals.total, tendered: tenderedNum,
+      customerName: customerName || undefined, customerPhone: customerPhone || undefined,
+    };
+    try {
+      const q = await enqueue(sale); // durable BEFORE we tell the cashier it is saved
+      setSavedOffline({ q, change, titles: lines.map((l) => `${l.quantity} × ${byId.get(l.productId)!.title}`) });
+      setCart({}); setDiscount(0); setTendered(""); setCustomerName(""); setCustomerPhone(""); setKey(crypto.randomUUID());
+      await refreshQueue();
+    } catch {
+      setError("Could not save this sale on the device. Do not hand over the goods until it is recorded.");
+    }
+    setBusy(false);
+  }
+
   async function submit() {
     setBusy(true);
     setError(null);
-    const r = await completeSale({
-      idempotencyKey: key,
-      lines: lines.map(({ productId, quantity }) => ({ productId, quantity })),
-      discountPercent: discount,
-      tendered: tenderedNum,
-      customerName,
-      customerPhone,
-    });
+    if (offlineReady && !navigator.onLine) return queueOffline();
+    let r;
+    try {
+      r = await completeSale({
+        idempotencyKey: key,
+        lines: lines.map(({ productId, quantity }) => ({ productId, quantity })),
+        discountPercent: discount,
+        tendered: tenderedNum,
+        customerName,
+        customerPhone,
+      });
+    } catch {
+      // Connection dropped mid-request. The same key is queued, so if the
+      // server did record it the sync simply returns the original receipt.
+      if (offlineReady) return queueOffline();
+      setError("No connection. Check the internet and try again — this sale has not been recorded.");
+      setBusy(false);
+      return;
+    }
     if (r.ok) {
       setKey(crypto.randomUUID());
       router.push(`/admin/business-os/pos/receipt/${r.receiptNumber}`);
@@ -70,7 +178,78 @@ export function PosTerminal({ items, maxDiscount }: { items: Item[]; maxDiscount
     }
   }
 
+  async function registerDevice() {
+    const name = window.prompt("Name this till (e.g. Front counter):");
+    if (!name) return;
+    const r = await registerOfflineTerminal(name);
+    if (!r.ok) { setError(r.error); return; }
+    await setMeta("terminalId", r.terminalId);
+    setTerminalId(r.terminalId);
+    setNotice("This device is now the offline terminal. Keep this page open until it says it is ready, then try it with the internet off.");
+  }
+
+  const waiting = queue.filter((q) => q.status !== "SYNCED");
+
   return (
+    <div className="space-y-6">
+    {savedOffline && (
+      <div className="hidden print:block">
+        <p className="text-center font-semibold">SWD — Smart Devices &amp; Digital Services</p>
+        <p className="text-center">PROVISIONAL RECEIPT {savedOffline.q.provisionalReceipt}</p>
+        <p className="text-center text-xs">Recorded on the till while offline. The official receipt number follows once synced.</p>
+        <ul className="mt-2">{savedOffline.titles.map((t) => <li key={t}>{t}</li>)}</ul>
+        <p className="mt-2">Total: {savedOffline.q.sale.expectedTotal.toLocaleString()} UGX · Cash {savedOffline.q.sale.tendered.toLocaleString()} · Change {savedOffline.change.toLocaleString()}</p>
+        <p className="text-xs">{new Date(savedOffline.q.sale.occurredAt).toLocaleString()}</p>
+      </div>
+    )}
+    <div className="space-y-6 print:hidden">
+      {offlineEnabled && (
+        <div className="rounded-xl border border-border bg-white p-4 text-sm" role="status">
+          <div className="flex flex-wrap items-center gap-3">
+            <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${online ? "bg-light text-slate" : "bg-navy text-white"}`}>{online ? "Online" : "Offline"}</span>
+            {offlineReady ? (
+              <>
+                <span className="text-navy">{waiting.length} sale{waiting.length === 1 ? "" : "s"} waiting to sync</span>
+                <button onClick={() => void syncAll()} disabled={!online || syncing || waiting.length === 0} className="rounded-lg bg-light px-3 py-1 text-xs font-medium text-navy hover:bg-border disabled:opacity-40">{syncing ? "Syncing…" : "Sync now"}</button>
+                {queue.some((q) => q.status === "SYNCED") && <button onClick={async () => { await clearSynced(); await refreshQueue(); }} className="text-xs text-slate underline">Clear synced</button>}
+              </>
+            ) : canRegisterTerminal ? (
+              <button onClick={registerDevice} className="rounded-lg bg-light px-3 py-1 text-xs font-medium text-navy hover:bg-border">Use this device as the offline terminal</button>
+            ) : (
+              <span className="text-slate">Offline selling is available on one registered till only. Ask the owner.</span>
+            )}
+          </div>
+          {!online && offlineReady && <p className="mt-2 text-xs text-slate">Cash sales only. Stock shown was current when this page loaded ({new Date(catalogueAt).toLocaleTimeString()}) and may be out of date.</p>}
+          {notice && <p className="mt-2 text-xs text-navy">{notice}</p>}
+          {queue.length > 0 && (
+            <ul className="mt-3 divide-y divide-border text-xs">
+              {queue.map((q) => (
+                <li key={q.sale.clientId} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2">
+                  <span className="font-medium text-navy">{q.receiptNumber ?? q.provisionalReceipt}</span>
+                  <span className="text-slate">{q.sale.expectedTotal.toLocaleString()} UGX · {new Date(q.sale.occurredAt).toLocaleTimeString()}</span>
+                  <span className="text-slate">{q.status === "PENDING_SYNC" ? "waiting" : q.status === "SYNCED" ? "recorded" : q.status === "SYNCING" ? "syncing" : "needs a manager"}</span>
+                  {q.sale.employeeId !== employeeId && q.status !== "SYNCED" && <span className="text-slate">— made by another employee; they must sign in to sync it</span>}
+                  {q.error && q.status !== "SYNCED" && <span className="text-red-600">{q.error}</span>}
+                  {q.status === "FAILED" && q.sale.employeeId === employeeId && (
+                    <button onClick={async () => { await updateItem(q.sale.clientId, { status: "PENDING_SYNC" }); await refreshQueue(); void syncAll(); }} className="text-blue underline">Retry</button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+      {savedOffline && (
+        <div role="status" className="rounded-xl border border-border bg-white p-4 text-sm">
+          <p className="font-semibold text-navy">Saved on this till — not yet recorded on the server</p>
+          <p className="mt-1 text-slate">Provisional receipt <b>{savedOffline.q.provisionalReceipt}</b> · Total {savedOffline.q.sale.expectedTotal.toLocaleString()} UGX · Change {savedOffline.change.toLocaleString()} UGX</p>
+          <p className="mt-1 text-xs text-slate">It will sync automatically when the internet returns. Do not clear the browser data on this device.</p>
+          <div className="mt-2 flex gap-3">
+            <button onClick={() => window.print()} className="rounded-lg bg-light px-3 py-1.5 text-xs font-medium text-navy hover:bg-border">Print provisional receipt</button>
+            <button onClick={() => setSavedOffline(null)} className="rounded-lg bg-blue px-3 py-1.5 text-xs font-medium text-white">Next sale</button>
+          </div>
+        </div>
+      )}
     <div className="grid gap-6 lg:grid-cols-2">
       <div className="rounded-xl border border-border bg-white p-4">
         <input
@@ -162,6 +341,8 @@ export function PosTerminal({ items, maxDiscount }: { items: Item[]; maxDiscount
           {busy ? "Completing…" : "Complete cash sale"}
         </button>
       </div>
+    </div>
+    </div>
     </div>
   );
 }

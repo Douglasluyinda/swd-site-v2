@@ -8,7 +8,8 @@ export type SettingKey =
   | "discount.cashier_percent"
   | "cash.variance_threshold"
   | "purchasing.owner_approval_threshold"
-  | "sop.review_months";
+  | "sop.review_months"
+  | "offline.enabled";
 
 type Def = { key: SettingKey; label: string; help: string; unit: string; default: number; min: number; max: number };
 
@@ -18,6 +19,7 @@ export const SETTING_DEFS: Def[] = [
   { key: "cash.variance_threshold", label: "Cash variance needing approval", help: "A closing difference larger than this (either way) must be approved by another manager/owner.", unit: "UGX", default: 5000, min: 0, max: 1_000_000 },
   { key: "purchasing.owner_approval_threshold", label: "Purchase orders needing the owner", help: "Orders above this total can only be approved by the owner.", unit: "UGX", default: 1_000_000, min: 0, max: 1_000_000_000 },
   { key: "sop.review_months", label: "SOP review period", help: "Default months until a newly approved procedure is due for review.", unit: "months", default: 12, min: 1, max: 60 },
+  { key: "offline.enabled", label: "Offline cash sales", help: "1 lets the one designated till queue cash sales while the internet is down and sync them later. 0 switches the feature off (default). Cash only; stock is not guaranteed current while offline.", unit: "0 = off, 1 = on", default: 0, min: 0, max: 1 },
 ];
 
 export type Settings = Record<SettingKey, number>;

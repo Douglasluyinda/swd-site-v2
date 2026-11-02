@@ -19,6 +19,8 @@ export default async function PosPage() {
     );
   }
 
+  const settings = await getSettings();
+  const limits = discountLimits(settings);
   const rows = await db.select().from(products).where(eq(products.fulfillmentType, "inventory"));
   const balances = await db.select().from(inventoryBalances);
   const onHand = new Map<number, number>();
@@ -53,7 +55,14 @@ export default async function PosPage() {
           Prices come from the server, not this screen. Only active SWD-stock products appear here.
         </p>
       </div>
-      <PosTerminal items={items} maxDiscount={discountLimits(await getSettings())[session!.staffRole] ?? 0} />
+      <PosTerminal
+        items={items}
+        maxDiscount={limits[session!.staffRole] ?? 0}
+        offlineEnabled={settings["offline.enabled"] === 1}
+        employeeId={Number(session!.adminId)}
+        canRegisterTerminal={hasPermission(session?.staffRole, "settings.manage")}
+        catalogueAt={new Date().toISOString()}
+      />
 
       <div className="overflow-x-auto rounded-xl border border-border bg-white">
         <p className="px-4 pt-4 text-sm font-medium text-slate">Recent sales</p>
