@@ -71,6 +71,13 @@
       "when": 1793591082875,
       "tag": "0009_business_os_sops",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1793591671168,
+      "tag": "0010_business_os_settings",
+      "breakpoints": true
     }
   ]
 }

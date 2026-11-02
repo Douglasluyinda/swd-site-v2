@@ -1,4 +1,5 @@
 import { and, eq, sql } from "drizzle-orm";
+import { getSettings } from "@/lib/settings-service";
 import { db } from "@/lib/db/client";
 import { cashMovements, cashSessions, repairPayments as repairPayments_, salePayments, saleReturns, sales } from "@/lib/db/schema";
 import { canApprove, expectedCash, needsApproval, validateClose, validateMovement, variance } from "@/lib/cash";
@@ -87,7 +88,7 @@ export async function closeSession(input: { sessionId: number; employeeId: numbe
     const err = validateClose({ counted: input.counted, varianceAmount: v, note: input.note });
     if (err) throw new Error(err);
 
-    const pending = needsApproval(v);
+    const pending = needsApproval(v, (await getSettings(tx))["cash.variance_threshold"]);
     await tx
       .update(cashSessions)
       .set({

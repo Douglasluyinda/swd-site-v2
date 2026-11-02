@@ -27,6 +27,7 @@ export function validateSaleInput(input: {
   role: string | null | undefined;
   tendered: number;
   total: number;
+  limits?: Record<string, number>; // from settings; defaults below
 }): string | null {
   if (input.lines.length === 0) return "The cart is empty.";
   for (const l of input.lines) {
@@ -38,7 +39,7 @@ export function validateSaleInput(input: {
   if (!Number.isFinite(input.discountPercent) || input.discountPercent < 0 || input.discountPercent > 100) {
     return "Discount must be between 0 and 100%.";
   }
-  const limit = DISCOUNT_LIMIT_PERCENT[input.role ?? ""] ?? 0;
+  const limit = (input.limits ?? DISCOUNT_LIMIT_PERCENT)[input.role ?? ""] ?? 0;
   if (input.discountPercent > limit) {
     return `Your role can give at most ${limit}% discount; ask a manager or owner.`;
   }

@@ -16,6 +16,8 @@ import {
   recordSupplierInvoice, recordSupplierPayment,
 } from "@/lib/purchase-orders";
 import { acknowledge as acknowledgeSop, approveDraft as approveSopDraft, discardDraft as discardSopDraft, saveDraft as saveSopDraft, seedRegister, startDraft as startSopDraft } from "@/lib/sop-service";
+import { isSettingKey } from "@/lib/settings";
+import { setSetting } from "@/lib/settings-service";
 import { addPart, answerQuote, assignTechnician, changeStatus as changeRepairStatus, collectDevice, createTicket, saveDiagnosis, submitQuote } from "@/lib/repair-service";
 import type { RepairStatus } from "@/lib/repairs";
 import { addCustomerNote, findOrCreateByPhone, updateCustomer } from "@/lib/customer-service";
@@ -869,4 +871,22 @@ export async function acknowledgeSopAction(f: FormData) {
     const r = await acknowledgeSop({ sopId, employeeId: a.id, role: a.role });
     return { audit: "sop.acknowledged", sopId, message: "Thank you — recorded.", metadata: { version: r.version } };
   });
+}
+
+// --- SWD Business OS: settings --------------------------------------------
+
+export async function saveBusinessSetting(f: FormData): Promise<RepairResult> {
+  try {
+    const s = await requireStaff("settings.manage", "change settings");
+    const key = str(f, "key");
+    if (!isSettingKey(key)) throw new Error("Unknown setting.");
+    const r = await setSetting({ key, value: str(f, "value"), by: Number(s.adminId) });
+    if (r.old !== r.new) {
+      await recordAuditEvent({ actorId: Number(s.adminId), actorEmail: s.email, action: "setting.changed", entityType: "setting", entityId: key, metadata: { old: r.old, new: r.new } });
+    }
+    revalidatePath("/admin/business-os/settings");
+    return { ok: true, message: r.old === r.new ? "No change" : `Saved (was ${r.old.toLocaleString()})` };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Something went wrong." };
+  }
 }

@@ -4,6 +4,7 @@ import {
   goodsReceiptItems, goodsReceipts, poCounters, purchaseOrderItems, purchaseOrders,
   supplierInvoices, supplierPayments, suppliers,
 } from "@/lib/db/schema";
+import { getSettings } from "@/lib/settings-service";
 import { applyStockMovement } from "@/lib/inventory";
 import {
   canApprovePo, poNumber, poTotal, remainingToReceive, statusAfterReceipt, supplierBalance,
@@ -49,6 +50,7 @@ export async function approvePurchaseOrder(input: {
     const err = canApprovePo({
       approverId: input.approverId, approverRole: input.approverRole, creatorId: po.createdBy,
       total: po.total, hasPermission: input.hasPermission,
+      ownerThreshold: (await getSettings(tx))["purchasing.owner_approval_threshold"],
     });
     if (err) throw new Error(err);
     await tx.update(purchaseOrders)

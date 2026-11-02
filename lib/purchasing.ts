@@ -30,13 +30,15 @@ export function validatePoLines(lines: { productId: number; quantity: number; un
 
 export function canApprovePo(input: {
   approverId: number; approverRole: string; creatorId: number; total: number; hasPermission: boolean;
+  ownerThreshold?: number;
 }): string | null {
+  const threshold = input.ownerThreshold ?? PO_OWNER_APPROVAL_THRESHOLD;
   if (!input.hasPermission) return "You do not have permission to approve purchase orders.";
   if (input.approverId === input.creatorId && input.approverRole !== "OWNER") {
     return "A purchase order must be approved by someone other than its creator.";
   }
-  if (input.total > PO_OWNER_APPROVAL_THRESHOLD && input.approverRole !== "OWNER") {
-    return `Orders above ${PO_OWNER_APPROVAL_THRESHOLD.toLocaleString()} UGX need the owner's approval.`;
+  if (input.total > threshold && input.approverRole !== "OWNER") {
+    return `Orders above ${threshold.toLocaleString()} UGX need the owner's approval.`;
   }
   return null;
 }

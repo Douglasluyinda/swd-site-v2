@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { admins, sopAcknowledgements, sopDocuments, sopVersions } from "@/lib/db/schema";
+import { getSettings } from "@/lib/settings-service";
 import { SOP_SEED } from "@/lib/sop-seed";
 import {
   REVIEW_MONTHS_DEFAULT, addMonths, mustAcknowledge, parseRoles, pendingAcknowledgements, validateApproval,
@@ -148,4 +149,4 @@ export async function pendingForEmployee(employeeId: number, role: string | null
 }
 
 export const DEFAULT_REVIEW_MONTHS = REVIEW_MONTHS_DEFAULT;
-export const defaultReviewDate = () => addMonths(today(), REVIEW_MONTHS_DEFAULT);
+export const defaultReviewDate = async () => addMonths(today(), (await getSettings())["sop.review_months"]);

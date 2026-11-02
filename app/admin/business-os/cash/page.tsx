@@ -7,7 +7,7 @@ import { getOpenSession, sessionTotals } from "@/lib/cash-sessions";
 import {
   approveCashSession, closeCashSession, correctCashSession, openCashSession, recordCashMovement,
 } from "@/lib/admin-actions";
-import { CASH_VARIANCE_THRESHOLD } from "@/lib/cash";
+import { getSettings } from "@/lib/settings-service";
 
 const input = "rounded-lg border border-border-strong px-3 py-2 text-sm";
 const fmt = (n: number) => n.toLocaleString();
@@ -56,7 +56,7 @@ export default async function CashPage() {
         <h1 className="text-2xl font-semibold text-navy">Cash Management</h1>
         <p className="mt-1 text-sm text-slate">
           Every cash sale and refund belongs to the employee&apos;s open session. Closed sessions are never edited —
-          fixes are logged corrections. Variance beyond {fmt(CASH_VARIANCE_THRESHOLD)} UGX needs another
+          fixes are logged corrections. Variance beyond {fmt((await getSettings())["cash.variance_threshold"])} UGX needs another
           manager/owner to approve. Cash only for now; mobile-money and card reconciliation arrive with those payment types.
         </p>
       </div>

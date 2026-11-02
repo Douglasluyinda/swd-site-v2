@@ -659,3 +659,13 @@ export const sopAcknowledgements = pgTable(
   },
   (t) => [unique("sop_ack_version_employee_uq").on(t.versionId, t.employeeId)],
 );
+
+// 24. BUSINESS OS SETTINGS — owner-editable business rules (discount limits,
+// thresholds). Defaults live in code (lib/settings.ts); a row only exists once
+// the owner changes a value. Every change is audit-logged with old and new value.
+export const appSettings = pgTable("app_settings", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+  updatedBy: integer("updated_by").references(() => admins.id),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});

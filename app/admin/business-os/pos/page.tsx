@@ -4,7 +4,8 @@ import { db } from "@/lib/db/client";
 import { inventoryBalances, products, sales, admins } from "@/lib/db/schema";
 import { getCurrentStaffSession } from "@/lib/admin-auth";
 import { hasPermission } from "@/lib/rbac";
-import { DISCOUNT_LIMIT_PERCENT } from "@/lib/pos";
+import { discountLimits } from "@/lib/settings";
+import { getSettings } from "@/lib/settings-service";
 import { PosTerminal } from "./PosTerminal";
 
 export default async function PosPage() {
@@ -52,7 +53,7 @@ export default async function PosPage() {
           Prices come from the server, not this screen. Only active SWD-stock products appear here.
         </p>
       </div>
-      <PosTerminal items={items} maxDiscount={DISCOUNT_LIMIT_PERCENT[session!.staffRole] ?? 0} />
+      <PosTerminal items={items} maxDiscount={discountLimits(await getSettings())[session!.staffRole] ?? 0} />
 
       <div className="overflow-x-auto rounded-xl border border-border bg-white">
         <p className="px-4 pt-4 text-sm font-medium text-slate">Recent sales</p>

@@ -33,6 +33,7 @@ export default async function SopPage({ params }: { params: Promise<{ sopId: str
   const [mine] = approved
     ? await db.select().from(sopAcknowledgements).where(and(eq(sopAcknowledgements.versionId, approved.id), eq(sopAcknowledgements.employeeId, Number(me.adminId)))).limit(1)
     : [];
+  const reviewDefault = draft ? await defaultReviewDate() : "";
   const status = manage ? await ackStatus(sopId) : null;
 
   return (
@@ -87,7 +88,7 @@ export default async function SopPage({ params }: { params: Promise<{ sopId: str
             <label className="block text-sm text-slate">Escalation<textarea name="escalation" defaultValue={draft.escalation ?? ""} rows={2} className={input} /></label>
             <label className="block text-sm text-slate">Records kept<textarea name="records" defaultValue={draft.records ?? ""} rows={2} className={input} /></label>
             <label className="block text-sm text-slate">What changed<input name="changeNote" defaultValue={draft.changeNote ?? ""} className={input} /></label>
-            <label className="block text-sm text-slate">Review by (YYYY-MM-DD)<input name="reviewDate" defaultValue={draft.reviewDate ?? defaultReviewDate()} className={input} /></label>
+            <label className="block text-sm text-slate">Review by (YYYY-MM-DD)<input name="reviewDate" defaultValue={draft.reviewDate ?? reviewDefault} className={input} /></label>
             <fieldset className="text-sm text-slate">
               <legend>Staff who must acknowledge</legend>
               <div className="mt-1 flex flex-wrap gap-4">

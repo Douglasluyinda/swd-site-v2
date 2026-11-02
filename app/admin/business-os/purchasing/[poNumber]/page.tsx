@@ -1,4 +1,5 @@
 import { eq, sql } from "drizzle-orm";
+import { getSettings } from "@/lib/settings-service";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db/client";
@@ -33,6 +34,7 @@ export default async function PoPage({ params }: { params: Promise<{ poNumber: s
   const approveBlocked = canApprovePo({
     approverId: Number(me!.adminId), approverRole: me!.staffRole, creatorId: po.createdBy,
     total: po.total, hasPermission: hasPermission(me?.staffRole, "purchasing.approve"),
+    ownerThreshold: (await getSettings())["purchasing.owner_approval_threshold"],
   });
   const canApprove = !approveBlocked && po.status === "PENDING_APPROVAL";
   const canReceive = hasPermission(me?.staffRole, "inventory.manage") && (po.status === "APPROVED" || po.status === "PARTIALLY_RECEIVED");

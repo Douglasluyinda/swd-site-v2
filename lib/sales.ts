@@ -12,6 +12,8 @@ import {
 import { applyStockMovement } from "@/lib/inventory";
 import { getOpenSession } from "@/lib/cash-sessions";
 import { findOrCreateByPhone } from "@/lib/customer-service";
+import { getSettings } from "@/lib/settings-service";
+import { discountLimits } from "@/lib/settings";
 import { normalizePhone } from "@/lib/customers";
 import {
   computeSale,
@@ -65,6 +67,7 @@ export async function createSale(input: CreateSaleInput): Promise<{ receiptNumbe
     role: input.role,
     tendered: input.tendered,
     total: totals.total,
+    limits: discountLimits(await getSettings()),
   });
   if (err) throw new Error(err);
 

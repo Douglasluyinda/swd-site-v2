@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { getCurrentStaffSession } from "@/lib/admin-auth";
 import { hasPermission, type Permission } from "@/lib/rbac";
+import { buildAlerts } from "@/lib/alerts";
+import { loadAlertCounts } from "@/lib/alert-queries";
 import { pendingForEmployee } from "@/lib/sop-service";
 
 // SWD Business OS — module launcher. Only modules with real, working
@@ -67,6 +69,7 @@ const modules: {
 export default async function BusinessOsPage() {
   const session = await getCurrentStaffSession();
   const role = session?.staffRole ?? null;
+  const alerts = session ? buildAlerts(await loadAlertCounts(), role) : [];
   const sopsPending = session ? (await pendingForEmployee(Number(session.adminId), role)).length : 0;
 
   return (
@@ -78,6 +81,20 @@ export default async function BusinessOsPage() {
         </span>
       </div>
       <p className="mt-1 text-sm text-slate">Internal business management dashboard.</p>
+
+      {alerts.length > 0 && (
+        <div role="region" aria-label="Needs attention" className="mt-6 rounded-xl border border-border bg-white p-5">
+          <p className="text-sm font-medium text-slate">Needs attention</p>
+          <ul className="mt-2 divide-y divide-border text-sm">
+            {alerts.map((a) => (
+              <li key={a.key} className="flex items-center gap-3 py-2">
+                <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${a.severity === "HIGH" ? "bg-navy text-white" : "bg-light text-slate"}`}>{a.severity === "HIGH" ? "Urgent" : "Soon"}</span>
+                <Link href={a.href} className="text-blue hover:underline">{a.text}</Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <div className="mt-6 grid gap-4 sm:grid-cols-2">
         {modules.map((m) => {
@@ -114,6 +131,9 @@ export default async function BusinessOsPage() {
         })}
       </div>
 
+      {hasPermission(role, "settings.manage") && (
+        <p className="mt-6 text-sm"><Link href="/admin/business-os/settings" className="text-blue hover:underline">Business settings</Link></p>
+      )}
       {hasPermission(role, "sops.read") && (
         <p className="mt-6 text-sm">
           <Link href="/admin/business-os/sops" className="text-blue hover:underline">SOP library</Link>

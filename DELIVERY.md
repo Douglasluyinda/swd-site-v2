@@ -712,3 +712,13 @@ by an engineer — nothing here guesses at them.
 - Migration `0009_business_os_sops.sql` (tables + ack trigger; the trigger reuses `repair_append_only` from 0008 — run the trigger block by hand after a push).
 - Not built: PDF/print layout, per-role acknowledgement deadlines, reminders by SMS/email, attachments/images in SOPs, revision comparison.
 - Tests: 164 passing locally (SOP rules, seed integrity, integration for approval/acknowledgement/supersede/concurrent approval/immutability); browser-verified with owner, manager, cashier and technician logins.
+
+## X. Business OS — Settings and alerts (Phase 10)
+
+- `/admin/business-os/settings` (OWNER only, `settings.manage`): the owner decisions that were hard-coded safe defaults are now editable — manager discount limit (10%), cashier discount limit (0%), cash variance needing approval (5,000 UGX), purchase-order amount needing the owner (1,000,000 UGX), default SOP review period (12 months). Owner is always unlimited; technicians can never discount; a cashier limit above the manager's is refused.
+- Until the owner changes a value the original default applies (no behaviour change on deploy). A bad stored value falls back to the default rather than loosening a control. Every change is audit-logged with old and new value and shown under "Recent changes".
+- Enforcement points read the settings server-side at the moment of use: POS discount check, cash-session close (variance approval), PO approval (also what the PO page shows), SOP default review date, POS till's discount ceiling and the cash page text.
+- "Needs attention" panel on the Business OS dashboard, computed live (nothing stored): cash sessions awaiting approval; sessions open 16h+; POs awaiting approval; products at/below reorder level; repair quotes unanswered 3+ days; repaired devices uncollected 14+ days; SOP reviews overdue/due within 30 days. Each alert shows only to roles that can act on it, urgent first. Staff also see their own outstanding SOP acknowledgements.
+- Not built: pushing alerts out by SMS/email/WhatsApp, per-user alert preferences, snooze/dismiss, configurable alert thresholds (3/14/16 days are constants in `lib/alerts.ts`), owner-decision items that still have no setting (payment methods, tax/receipt rules, data retention, offline priority).
+- No new migration trigger; one new table (`app_settings`) — included in the next generated migration (see below).
+- Tests: 175 passing locally (settings rules, alerts, and integration proving a changed limit is enforced on the next sale and variance close); browser-verified as owner (edit, inline rejection, history) and manager (blocked).
