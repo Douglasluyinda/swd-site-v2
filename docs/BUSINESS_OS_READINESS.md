@@ -73,9 +73,9 @@ run against the live Neon database or the live site.
 2. **Environment variables** on the host: `DATABASE_URL`, `ADMIN_SESSION_SECRET` (random, 32+
    characters; changing it signs everyone out), `NEXT_PUBLIC_SITE_URL`, plus the existing
    Flutterwave / Blob / messaging variables. Leave `DB_POOL_MAX` unset (default 1 on serverless).
-3. **Apply the migrations** with the SQL files, not `drizzle-kit push`:
-   `for f in drizzle/0004*.sql … drizzle/0011*.sql; do psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$f"; done`
-   in that order. This is the path verified above and it also creates the triggers (this replaces
+3. **Apply the migrations** with the SQL files, not `drizzle-kit push`, using the helper
+   `DATABASE_URL='<direct Neon connection string>' ./scripts/apply-business-os-migrations.sh`
+   (backs up first, refuses to run twice, applies 0004–0011 in one transaction so a failure changes nothing; tested on a pre-Business-OS database). This is the path verified above and it also creates the triggers (this replaces
    the earlier note about running triggers by hand after a push). Production was created by
    `push`, so the Drizzle migration history table is not used; do not run `drizzle-kit migrate`.
    If a file fails midway, stop and restore the backup rather than re-running.

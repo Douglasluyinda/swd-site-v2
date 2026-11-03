@@ -12,3 +12,7 @@ out
 test-results
 playwright-report
 blob-report
+
+# database backups made by scripts — never commit
+backup-before-*.dump
+*.dump
